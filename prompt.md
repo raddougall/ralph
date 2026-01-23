@@ -4,6 +4,8 @@ You are an autonomous coding agent working on a software project.
 
 ## Your Task
 
+Before starting, check whether a relevant skill exists under `skills/` in this repo. If so, read its `SKILL.md` and follow those instructions.
+
 1. Read the PRD at `prd.json` (in the same directory as this file)
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
@@ -20,7 +22,7 @@ You are an autonomous coding agent working on a software project.
 APPEND to progress.txt (never replace, always append):
 ```
 ## [Date/Time] - [Story ID]
-Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+Session: (Amp thread URL or Codex session ID if available)
 - What was implemented
 - Files changed
 - **Learnings for future iterations:**
@@ -30,7 +32,7 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
 ---
 ```
 
-Include the thread URL so future iterations can use the `read_thread` tool to reference previous work if needed.
+Include a session link or ID when available so future iterations can reference prior work if needed.
 
 The learnings section is critical - it helps future iterations avoid repeating mistakes and understand the codebase better.
 
@@ -84,10 +86,11 @@ Only update AGENTS.md if you have **genuinely reusable knowledge** that would he
 
 For any story that changes UI, you MUST verify it works in the browser:
 
-1. Load the `dev-browser` skill
+1. If a browser automation tool/skill is available, load it
 2. Navigate to the relevant page
 3. Verify the UI changes work as expected
 4. Take a screenshot if helpful for the progress log
+5. If no browser tool is available, note that manual verification is required
 
 A frontend story is NOT complete until browser verification passes.
 

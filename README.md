@@ -2,7 +2,7 @@
 
 ![Ralph](ralph.webp)
 
-Ralph is an autonomous AI agent loop that runs AI coding tools ([Amp](https://ampcode.com) or [Claude Code](https://docs.anthropic.com/en/docs/claude-code)) repeatedly until all PRD items are complete. Each iteration is a fresh instance with clean context. Memory persists via git history, `progress.txt`, and `prd.json`.
+Ralph is an autonomous AI agent loop that runs [Amp](https://ampcode.com) (default) or Codex repeatedly until all PRD items are complete. Each iteration is a fresh agent instance with clean context. Memory persists via git history, `progress.txt`, and `prd.json`.
 
 Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
@@ -10,9 +10,7 @@ Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
 ## Prerequisites
 
-- One of the following AI coding tools installed and authenticated:
-  - [Amp CLI](https://ampcode.com) (default)
-  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`)
+- [Amp CLI](https://ampcode.com) installed and authenticated (default), or Codex CLI
 - `jq` installed (`brew install jq` on macOS)
 - A git repository for your project
 
@@ -26,32 +24,31 @@ Copy the ralph files into your project:
 # From your project root
 mkdir -p scripts/ralph
 cp /path/to/ralph/ralph.sh scripts/ralph/
-
-# Copy the prompt template for your AI tool of choice:
-cp /path/to/ralph/prompt.md scripts/ralph/prompt.md    # For Amp
-# OR
-cp /path/to/ralph/CLAUDE.md scripts/ralph/CLAUDE.md    # For Claude Code
-
+cp /path/to/ralph/prompt.md scripts/ralph/
 chmod +x scripts/ralph/ralph.sh
 ```
 
-### Option 2: Install skills globally
+### Option 2: Install skills globally (Amp only)
 
-Copy the skills to your Amp or Claude config for use across all projects:
+Copy the skills to your Amp config for use across all projects:
 
-For AMP
 ```bash
 cp -r skills/prd ~/.config/amp/skills/
 cp -r skills/ralph ~/.config/amp/skills/
 ```
 
-For Claude Code
+### Option 3: Install skills for Codex
+
+Codex only loads skills from `$CODEX_HOME/skills` (default: `~/.codex/skills`).
+Symlink this repo’s skills into Codex:
+
 ```bash
-cp -r skills/prd ~/.claude/skills/
-cp -r skills/ralph ~/.claude/skills/
+./scripts/install-codex-skills.sh
 ```
 
-### Configure Amp auto-handoff (recommended)
+Then restart Codex to pick up the new skills. Re-run the script any time you add or rename skills in this repo.
+
+### Configure Amp auto-handoff (recommended, Amp only)
 
 Add to `~/.config/amp/settings.json`:
 
@@ -84,18 +81,24 @@ Load the ralph skill and convert tasks/prd-[feature-name].md to prd.json
 ```
 
 This creates `prd.json` with user stories structured for autonomous execution.
+If you're using Codex, you can generate the PRD manually or with your preferred tooling.
 
 ### 3. Run Ralph
 
 ```bash
-# Using Amp (default)
+# Amp (default)
 ./scripts/ralph/ralph.sh [max_iterations]
 
-# Using Claude Code
-./scripts/ralph/ralph.sh --tool claude [max_iterations]
+# Codex
+RALPH_AGENT=codex ./scripts/ralph/ralph.sh [max_iterations]
 ```
 
-Default is 10 iterations. Use `--tool amp` or `--tool claude` to select your AI coding tool.
+Default is 10 iterations.
+
+To customize Codex flags, set `RALPH_CODEX_FLAGS` (default: `--full-auto --color never`):
+```bash
+RALPH_CODEX_FLAGS="--full-auto -m o3" RALPH_AGENT=codex ./scripts/ralph/ralph.sh
+```
 
 Ralph will:
 1. Create a feature branch (from PRD `branchName`)
@@ -111,9 +114,8 @@ Ralph will:
 
 | File | Purpose |
 |------|---------|
-| `ralph.sh` | The bash loop that spawns fresh AI instances (supports `--tool amp` or `--tool claude`) |
-| `prompt.md` | Prompt template for Amp |
-| `CLAUDE.md` | Prompt template for Claude Code |
+| `ralph.sh` | The bash loop that spawns fresh Amp or Codex instances |
+| `prompt.md` | Instructions given to each agent instance |
 | `prd.json` | User stories with `passes` status (the task list) |
 | `prd.json.example` | Example PRD format for reference |
 | `progress.txt` | Append-only learnings for future iterations |
@@ -139,7 +141,7 @@ npm run dev
 
 ### Each Iteration = Fresh Context
 
-Each iteration spawns a **new AI instance** (Amp or Claude Code) with clean context. The only memory between iterations is:
+Each iteration spawns a **new Amp instance** with clean context. The only memory between iterations is:
 - Git history (commits from previous iterations)
 - `progress.txt` (learnings and context)
 - `prd.json` (which stories are done)
@@ -161,7 +163,7 @@ Too big (split these):
 
 ### AGENTS.md Updates Are Critical
 
-After each iteration, Ralph updates the relevant `AGENTS.md` files with learnings. This is key because AI coding tools automatically read these files, so future iterations (and future human developers) benefit from discovered patterns, gotchas, and conventions.
+After each iteration, Ralph updates the relevant `AGENTS.md` files with learnings. This is key because Amp automatically reads these files, so future iterations (and future human developers) benefit from discovered patterns, gotchas, and conventions.
 
 Examples of what to add to AGENTS.md:
 - Patterns discovered ("this codebase uses X for Y")
@@ -198,9 +200,9 @@ cat progress.txt
 git log --oneline -10
 ```
 
-## Customizing the Prompt
+## Customizing prompt.md
 
-After copying `prompt.md` (for Amp) or `CLAUDE.md` (for Claude Code) to your project, customize it for your project:
+Edit `prompt.md` to customize Ralph's behavior for your project:
 - Add project-specific quality check commands
 - Include codebase conventions
 - Add common gotchas for your stack
@@ -213,4 +215,3 @@ Ralph automatically archives previous runs when you start a new feature (differe
 
 - [Geoffrey Huntley's Ralph article](https://ghuntley.com/ralph/)
 - [Amp documentation](https://ampcode.com/manual)
-- [Claude Code documentation](https://docs.anthropic.com/en/docs/claude-code)
