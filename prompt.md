@@ -1,6 +1,7 @@
 # Ralph Agent Instructions
 
 You are an autonomous coding agent working on a software project.
+You are authorized to create git commits as needed when work passes checks.
 
 ## Your Task
 
@@ -81,6 +82,10 @@ Only update AGENTS.md if you have **genuinely reusable knowledge** that would he
 - Do NOT commit broken code
 - Keep changes focused and minimal
 - Follow existing code patterns
+
+## Git Sandbox Troubleshooting
+
+If you see "Operation not permitted" when writing to `.git/*` (e.g., `index.lock` or `refs/heads/*`), the sandbox is blocking git writes. Re-run git commands that write to `.git` (switch/checkout/branch/commit/add) with elevated permissions. If escalation still fails, ask the user to run git commands locally outside the agent sandbox. For slash-named branches (e.g., `ralph/*`), ensure `.git/refs/heads/ralph` is not a file; rename it and create the directory before retrying.
 
 ## Browser Testing (Required for Frontend Stories)
 
