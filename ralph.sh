@@ -16,6 +16,14 @@ ARCHIVE_DIR="$SCRIPT_DIR/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 LOG_FILE="$SCRIPT_DIR/ralph.log"
 
+# Guardrail: block host-level package manager mutations unless explicitly allowed.
+if [ -d "$SCRIPT_DIR/guard-bin" ]; then
+  export PATH="$SCRIPT_DIR/guard-bin:$PATH"
+fi
+
+# This must be explicitly set to 1 only after user approval for host-level changes.
+export RALPH_ALLOW_SYSTEM_CHANGES=${RALPH_ALLOW_SYSTEM_CHANGES:-0}
+
 # Normalize HOME/CODEX_HOME so Codex can create sessions reliably.
 if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
   USER_HOME=$(eval echo "~${USER}")
@@ -176,13 +184,14 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   
   # Run the selected agent with the ralph prompt
   if [ "$AGENT" = "codex" ]; then
+    LAST_MESSAGE_FILE=$(mktemp "${SCRIPT_DIR}/.codex-last-message.XXXXXX")
     if [ -n "$FOLLOW_LOG" ]; then
-      LOG_OFFSET=$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)
-      cat "$SCRIPT_DIR/prompt.md" | "$CODEX_BIN" exec $CODEX_FLAGS - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
-      OUTPUT=$(tail -c +$((LOG_OFFSET+1)) "$LOG_FILE" 2>/dev/null || true)
+      cat "$SCRIPT_DIR/prompt.md" | "$CODEX_BIN" exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
     else
-      OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | "$CODEX_BIN" exec $CODEX_FLAGS - 2>&1 | tee "${TEE_ARGS[@]}") || true
+      cat "$SCRIPT_DIR/prompt.md" | "$CODEX_BIN" exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
     fi
+    OUTPUT=$(cat "$LAST_MESSAGE_FILE" 2>/dev/null || true)
+    rm -f "$LAST_MESSAGE_FILE" 2>/dev/null || true
   elif [ "$AGENT" = "amp" ]; then
     if [ -n "$FOLLOW_LOG" ]; then
       LOG_OFFSET=$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)

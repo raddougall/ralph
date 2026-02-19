@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cmd_name="$(basename "$0")"
+guard_dir="$(cd "$(dirname "$0")" && pwd)"
+
+if [ "${RALPH_ALLOW_SYSTEM_CHANGES:-0}" = "1" ]; then
+  clean_path=""
+  IFS=':' read -r -a path_parts <<< "$PATH"
+  for path_part in "${path_parts[@]}"; do
+    if [ "$path_part" = "$guard_dir" ]; then
+      continue
+    fi
+    if [ -z "$clean_path" ]; then
+      clean_path="$path_part"
+    else
+      clean_path="$clean_path:$path_part"
+    fi
+  done
+
+  real_cmd="$(PATH="$clean_path" command -v "$cmd_name" || true)"
+  if [ -z "$real_cmd" ]; then
+    echo "Guardrail error: could not locate real command for '$cmd_name'." >&2
+    exit 127
+  fi
+
+  exec "$real_cmd" "$@"
+fi
+
+echo "Blocked system-level command '$cmd_name'." >&2
+echo "This Ralph run requires explicit user approval before host package manager changes." >&2
+echo "If approved, re-run with: RALPH_ALLOW_SYSTEM_CHANGES=1" >&2
+exit 97
