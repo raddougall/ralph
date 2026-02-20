@@ -5,7 +5,7 @@ You are authorized to create git commits as needed when work passes checks.
 
 ## Your Task
 
-Before starting, check whether a relevant skill exists under `skills/` in this repo. If so, read its `SKILL.md` and follow those instructions.
+Before starting, check whether a relevant skill exists under `skills/` in this repo. If so, read its `SKILL.md` and follow those instructions. Then read `AGENTS.md` and follow its constraints.
 
 1. Read the PRD at `prd.json` (in the same directory as this file)
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
@@ -79,6 +79,7 @@ Only update AGENTS.md if you have **genuinely reusable knowledge** that would he
 ## Quality Requirements
 
 - ALL commits must pass your project's quality checks (typecheck, lint, test)
+- Every story must add or update automated tests for the changed behavior; do not rely on manual-only validation.
 - Do NOT commit broken code
 - Keep changes focused and minimal
 - Follow existing code patterns
@@ -101,10 +102,11 @@ For any story that changes UI, you MUST verify it works in the browser:
 1. If a browser automation tool/skill is available, load it
 2. Navigate to the relevant page
 3. Verify the UI changes work as expected
-4. Take a screenshot if helpful for the progress log
-5. If no browser tool is available, note that manual verification is required
+4. Add or update automated UI test coverage for the changed behavior
+5. Take a screenshot if helpful for the progress log
+6. If no browser tool is available, still deliver automated test coverage and log the browser tooling gap
 
-A frontend story is NOT complete until browser verification passes.
+A frontend story is NOT complete until automated coverage for the UI change is in place.
 
 ## Stop Condition
 
