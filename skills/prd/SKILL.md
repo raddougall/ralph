@@ -83,11 +83,14 @@ Each story should be small enough to implement in one focused session.
 - [ ] Specific verifiable criterion
 - [ ] Another criterion
 - [ ] Typecheck/lint passes
+- [ ] Automated tests for changed behavior pass
+- [ ] CI-ready non-interactive test command/script is defined or updated
 - [ ] **[UI stories only]** Verify in browser using dev-browser skill
 ```
 
 **Important:** 
 - Acceptance criteria must be verifiable, not vague. "Works correctly" is bad. "Button shows confirmation dialog before deleting" is good.
+- Every story should include acceptance criteria that require automated tests for changed behavior and a CI-ready non-interactive command/script to run them.
 - **For any story with UI changes:** Always include "Verify in browser using dev-browser skill" as acceptance criteria. This ensures visual verification of frontend work.
 
 ### 4. Functional Requirements
@@ -165,6 +168,8 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 - [ ] Add priority column to tasks table: 'high' | 'medium' | 'low' (default 'medium')
 - [ ] Generate and run migration successfully
 - [ ] Typecheck passes
+- [ ] Automated tests for changed behavior pass
+- [ ] CI-ready non-interactive test command/script is defined or updated
 
 ### US-002: Display priority indicator on task cards
 **Description:** As a user, I want to see task priority at a glance so I know what needs attention first.
@@ -173,6 +178,8 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 - [ ] Each task card shows colored priority badge (red=high, yellow=medium, gray=low)
 - [ ] Priority visible without hovering or clicking
 - [ ] Typecheck passes
+- [ ] Automated tests for changed behavior pass
+- [ ] CI-ready non-interactive test command/script is defined or updated
 - [ ] Verify in browser using dev-browser skill
 
 ### US-003: Add priority selector to task edit
@@ -183,6 +190,8 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 - [ ] Shows current priority as selected
 - [ ] Saves immediately on selection change
 - [ ] Typecheck passes
+- [ ] Automated tests for changed behavior pass
+- [ ] CI-ready non-interactive test command/script is defined or updated
 - [ ] Verify in browser using dev-browser skill
 
 ### US-004: Filter tasks by priority
@@ -193,6 +202,8 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 - [ ] Filter persists in URL params
 - [ ] Empty state message when no tasks match filter
 - [ ] Typecheck passes
+- [ ] Automated tests for changed behavior pass
+- [ ] CI-ready non-interactive test command/script is defined or updated
 - [ ] Verify in browser using dev-browser skill
 
 ## Functional Requirements
@@ -236,6 +247,7 @@ Before saving the PRD:
 - [ ] Asked clarifying questions with lettered options
 - [ ] Incorporated user's answers
 - [ ] User stories are small and specific
+- [ ] Every story includes automated test + CI-ready non-interactive test command/script criteria
 - [ ] Functional requirements are numbered and unambiguous
 - [ ] Non-goals section defines clear boundaries
 - [ ] Saved to `tasks/prd-[feature-name].md`

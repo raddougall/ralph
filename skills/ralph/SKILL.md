@@ -31,7 +31,9 @@ Take a PRD (markdown file or text) and convert it to `prd.json` in your ralph di
       "acceptanceCriteria": [
         "Criterion 1",
         "Criterion 2",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Automated tests for changed behavior pass",
+        "CI-ready non-interactive test command/script is defined"
       ],
       "priority": 1,
       "passes": false,
@@ -89,7 +91,8 @@ Each criterion must be something Jarvis can CHECK, not something vague.
 - "Filter dropdown has options: All, Active, Completed"
 - "Clicking delete shows confirmation dialog"
 - "Typecheck passes"
-- "Tests pass"
+- "Automated tests for changed behavior pass"
+- "CI test command/script runs non-interactively"
 
 ### Bad criteria (vague):
 - "Works correctly"
@@ -97,14 +100,15 @@ Each criterion must be something Jarvis can CHECK, not something vague.
 - "Good UX"
 - "Handles edge cases"
 
-### Always include as final criterion:
+### Always include baseline criteria:
 ```
 "Typecheck passes"
+"CI-ready non-interactive test command/script is defined"
 ```
 
 For stories with testable logic, also include:
 ```
-"Tests pass"
+"Automated tests for changed behavior pass"
 ```
 
 ### For stories that change UI, also include:
@@ -124,6 +128,8 @@ Frontend stories are NOT complete until visually verified. Jarvis will use the d
 4. **All stories**: `passes: false` and empty `notes`
 5. **branchName**: Derive from feature name, kebab-case, prefixed with `ralph/`
 6. **Always add**: "Typecheck passes" to every story's acceptance criteria
+7. **Always add**: a CI-ready non-interactive test command/script criterion to every story
+8. **When feasible**: include "Automated tests for changed behavior pass" for the story scope
 
 ---
 
@@ -175,7 +181,9 @@ Add ability to mark tasks with different statuses.
       "acceptanceCriteria": [
         "Add status column: 'pending' | 'in_progress' | 'done' (default 'pending')",
         "Generate and run migration successfully",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Automated tests for changed behavior pass",
+        "CI-ready non-interactive test command/script is defined"
       ],
       "priority": 1,
       "passes": false,
@@ -189,6 +197,8 @@ Add ability to mark tasks with different statuses.
         "Each task card shows colored status badge",
         "Badge colors: gray=pending, blue=in_progress, green=done",
         "Typecheck passes",
+        "Automated tests for changed behavior pass",
+        "CI-ready non-interactive test command/script is defined",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
@@ -204,6 +214,8 @@ Add ability to mark tasks with different statuses.
         "Changing status saves immediately",
         "UI updates without page refresh",
         "Typecheck passes",
+        "Automated tests for changed behavior pass",
+        "CI-ready non-interactive test command/script is defined",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
@@ -218,6 +230,8 @@ Add ability to mark tasks with different statuses.
         "Filter dropdown: All | Pending | In Progress | Done",
         "Filter persists in URL params",
         "Typecheck passes",
+        "Automated tests for changed behavior pass",
+        "CI-ready non-interactive test command/script is defined",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
@@ -253,6 +267,8 @@ Before writing prd.json, verify:
 - [ ] Each story is completable in one iteration (small enough)
 - [ ] Stories are ordered by dependency (schema to backend to UI)
 - [ ] Every story has "Typecheck passes" as criterion
+- [ ] Every story has a CI-ready non-interactive test command/script criterion
+- [ ] Stories include automated test coverage criteria for changed behavior when feasible
 - [ ] UI stories have "Verify in browser using dev-browser skill" as criterion
 - [ ] Acceptance criteria are verifiable (not vague)
 - [ ] No story depends on a later story

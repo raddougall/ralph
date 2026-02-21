@@ -164,7 +164,7 @@ Jarvis will:
 2. Pick the highest priority story where `passes: false`
 3. If ClickUp is configured, move the matching `[US-xxx]` task from `to do` to `in progress`
 4. Implement that single story
-5. Run quality checks (typecheck, tests)
+5. Run the automated quality suite via CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
 6. Commit if checks pass
 7. Update `prd.json` to mark story as `passes: true`
 8. If ClickUp is configured, attach commit link(s), add task activity notes (changes + tests + outcome), and move task to `testing`
@@ -254,6 +254,7 @@ Examples of what to add to AGENTS.md:
 Jarvis only works if there are feedback loops:
 - Typecheck catches type errors
 - Tests verify behavior
+- Stories should add/update as much automated test coverage as feasible and keep CI-friendly, non-interactive test commands/scripts current
 - CI must stay green (broken code compounds across iterations)
 
 ### Browser Verification for UI Stories

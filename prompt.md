@@ -13,7 +13,7 @@ Before starting, check whether a relevant skill exists under `skills/` in this r
 4. Pick the **highest priority** user story where `passes: false`
 5. If ClickUp is configured (see below), find the matching task for the story and move it from `to do` to `in progress`
 6. Implement that single user story
-7. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)
+7. Run the full automated quality suite for the changed scope using CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
 8. Update AGENTS.md files if you discover reusable patterns (see below)
 9. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]` (append ` | ClickUp: <task_id>` when task id is known)
 10. Update the PRD to set `passes: true` for the completed story
@@ -115,8 +115,9 @@ Only update AGENTS.md if you have **genuinely reusable knowledge** that would he
 
 ## Quality Requirements
 
-- ALL commits must pass your project's quality checks (typecheck, lint, test)
-- Every story must add or update automated tests for the changed behavior; do not rely on manual-only validation.
+- ALL commits must pass your project's automated quality checks (typecheck, lint, test)
+- Every story must maximize automated coverage feasible for the changed scope and add or update tests for changed behavior; do not rely on manual-only validation.
+- If CI-ready test scripts/commands are missing for changed behavior, create or update them so tests can run non-interactively in continuous integration.
 - Do NOT commit broken code
 - Keep changes focused and minimal
 - Follow existing code patterns

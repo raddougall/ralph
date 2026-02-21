@@ -49,5 +49,6 @@ npm run dev
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.
 - Project runs may read shared Jarvis runtime files but must not edit Jarvis itself or other files outside the active project root unless explicitly requested.
 - Localhost test interactions are fine without per-click approval prompts, but any server started for testing must be shut down before the iteration ends.
+- Every project must maximize automated testing for changed behavior and keep CI-ready, non-interactive test scripts/commands up to date.
 - Always update AGENTS.md with discovered patterns for future iterations
 - If ClickUp credentials are configured, every story must use `to do` as the ready queue (`backlog` is ideas only), move status `in progress` -> `testing`, include commit linkage, and include an activity note with implementation + testing outcome.
