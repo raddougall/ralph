@@ -133,6 +133,8 @@ The launcher pins execution to this repo by exporting:
 - `JARVIS_PROJECT_DIR=<this repo root>`
 
 That means all working files (`prd.json`, `progress.txt`, `archive/`, logs, branch tracking) stay inside this project directory.
+Story iterations are expected to write inside this project root (code changes, tests, commits, ClickUp state updates).
+Read-only restrictions apply to paths outside this project root.
 
 Before each run, master Jarvis auto-syncs project-local wrappers/docs/templates from Jarvis defaults.
 This sync is additive and does not overwrite existing secret values in local env files.

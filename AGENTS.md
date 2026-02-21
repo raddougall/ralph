@@ -49,6 +49,7 @@ npm run dev
 - For Codex runs, detect completion from `--output-last-message` content, not streamed logs, to avoid false `<promise>COMPLETE</promise>` matches.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.
+- Project iterations must run with writable access inside `JARVIS_PROJECT_DIR`; read-only intent applies to paths outside the active project root, not the project itself.
 - Jarvis auto-syncs project-local wrappers/docs/templates from master at run start by default (`JARVIS_PROJECT_SYNC_ON_START=1`), and this sync must not overwrite existing project secret values.
 - Project runs may read shared Jarvis runtime files but must not edit Jarvis itself or other files outside the active project root unless explicitly requested.
 - Localhost test interactions are fine without per-click approval prompts, but any server started for testing must be shut down before the iteration ends.

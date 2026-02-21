@@ -379,6 +379,14 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   fi
   
   # Check for completion signal
+  if echo "$OUTPUT" | grep -q "sandbox: read-only"; then
+    echo ""
+    echo "Jarvis detected a read-only Codex sandbox."
+    echo "Project runs require workspace-write inside: $PROJECT_DIR"
+    echo "Check project/local env overrides for JARVIS_CODEX_GLOBAL_FLAGS and remove any read-only sandbox setting."
+    exit 2
+  fi
+
   if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
     echo ""
     echo "Jarvis completed all tasks!"

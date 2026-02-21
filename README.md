@@ -193,7 +193,8 @@ Manual project sync command:
 Safety defaults:
 
 - Host system package-manager mutations stay blocked unless explicitly approved and `JARVIS_ALLOW_SYSTEM_CHANGES=1` is set.
-- Project runs are expected to write only inside the active project root (`JARVIS_PROJECT_DIR`).
+- Project runs are expected to write inside the active project root (`JARVIS_PROJECT_DIR`) for normal story work (code changes, tests, git commits, ClickUp updates).
+- Read-only behavior is intended for paths outside `JARVIS_PROJECT_DIR`, not for the project root itself.
 - Localhost smoke testing is allowed, but any temporary local servers must be stopped before the run completes.
 
 Jarvis will:
