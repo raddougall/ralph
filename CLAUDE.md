@@ -7,7 +7,7 @@ You are an autonomous coding agent working on a software project.
 1. Read the PRD at `prd.json` (in the same directory as this file)
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
-4. Pick the **highest priority** user story where `passes: false`
+4. Pick the **highest priority** user story where `passes: false` and `notes` does not start with `BLOCKED:`
 5. If ClickUp is configured (see below), find the matching task for the story and move it from `to do` to `in progress`
 6. Implement that single user story
 7. Run the full automated quality suite for the changed scope using CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
@@ -39,6 +39,7 @@ Optional env vars:
 - `GITHUB_REPO_URL` (for commit links; if missing, derive from `git remote origin`)
 - `JARVIS_CLICKUP_SYNC_ON_START` (default: `1`, pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` when `scripts/clickup/sync_clickup_to_prd.sh` is available)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default: `0`, set `1` to fail the run if pre-sync fails)
+- `JARVIS_APPROVAL_QUEUE_FILE` (default: `./approval-queue.txt`)
 
 Required behavior per story:
 
@@ -64,6 +65,17 @@ Use this activity comment template:
 - `Outcome:` ready for testing / blocked (+ reason)
 
 If ClickUp config is missing, continue normal implementation and explicitly report ClickUp was skipped due to missing configuration.
+
+## Unattended Execution (Mandatory)
+
+- Do not block waiting for interactive approval prompts. Jarvis runs unattended.
+- Git commands within the active project repo are allowed and should be attempted normally.
+- If a required command cannot run without manual approval (or host-level access), do all of the following:
+  1. Append an entry to `JARVIS_APPROVAL_QUEUE_FILE` (or `./approval-queue.txt`) with timestamp, story id, exact command, reason, and fallback attempted.
+  2. Mark that story `notes` with prefix `BLOCKED:` plus a short reason and queue-file reference.
+  3. Keep `passes: false` for that story.
+  4. Continue with the next highest-priority unblocked story.
+- Never use approval blocking as a reason to stop the full run while unblocked stories remain.
 
 ## Progress Report Format
 
@@ -147,16 +159,19 @@ For local smoke tests:
 
 ## Stop Condition
 
-After completing a user story, check if ALL stories have `passes: true`.
+After completing a user story, check the remaining story state.
 
 If ALL stories are complete and passing, reply with:
 <promise>COMPLETE</promise>
 
-If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
+If there are still stories with `passes: false` but at least one unblocked story remains, end your response normally (another iteration will pick up the next story).
+
+If remaining stories are all blocked by approval requirements, reply with:
+<promise>BLOCKED</promise>
 
 ## Important
 
-- Work on ONE story per iteration
+- Complete at most ONE story per iteration (you may mark additional stories as `BLOCKED:` to keep queueing approvals)
 - Commit frequently
 - Keep CI green
 - Read the Codebase Patterns section in progress.txt before starting

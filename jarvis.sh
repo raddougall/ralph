@@ -7,7 +7,7 @@ set -e
 MAX_ITERATIONS=${1:-10}
 AGENT=${JARVIS_AGENT:-${RALPH_AGENT:-amp}}
 AMP_FLAGS=${JARVIS_AMP_FLAGS:-${RALPH_AMP_FLAGS:---dangerously-allow-all}}
-CODEX_FLAGS=${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:---full-auto --color never}}
+CODEX_FLAGS=${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:---sandbox workspace-write -a never --color never}}
 CODEX_BIN=${JARVIS_CODEX_BIN:-${RALPH_CODEX_BIN:-codex}}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
@@ -17,6 +17,7 @@ PROGRESS_FILE="$PROJECT_DIR/progress.txt"
 ARCHIVE_DIR="$PROJECT_DIR/archive"
 LAST_BRANCH_FILE="$PROJECT_DIR/.last-branch"
 LOG_FILE="$PROJECT_DIR/jarvis.log"
+APPROVAL_QUEUE_FILE="${JARVIS_APPROVAL_QUEUE_FILE:-${RALPH_APPROVAL_QUEUE_FILE:-$PROJECT_DIR/approval-queue.txt}}"
 PROMPT_FILE="${JARVIS_PROMPT_FILE:-${RALPH_PROMPT_FILE:-}}"
 if [ -z "$PROMPT_FILE" ]; then
   if [ -f "$PROJECT_DIR/.jarvis/prompt.md" ]; then
@@ -53,6 +54,9 @@ fi
 export JARVIS_ALLOW_SYSTEM_CHANGES=${JARVIS_ALLOW_SYSTEM_CHANGES:-${RALPH_ALLOW_SYSTEM_CHANGES:-0}}
 # Backward-compat for existing guard script checks.
 export RALPH_ALLOW_SYSTEM_CHANGES="${RALPH_ALLOW_SYSTEM_CHANGES:-$JARVIS_ALLOW_SYSTEM_CHANGES}"
+export JARVIS_APPROVAL_QUEUE_FILE="$APPROVAL_QUEUE_FILE"
+# Backward-compat for scripts/prompts that still read the legacy prefix.
+export RALPH_APPROVAL_QUEUE_FILE="${RALPH_APPROVAL_QUEUE_FILE:-$JARVIS_APPROVAL_QUEUE_FILE}"
 
 # Normalize HOME/CODEX_HOME so Codex can create sessions reliably.
 if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
@@ -279,6 +283,15 @@ if [ ! -f "$PROGRESS_FILE" ]; then
   echo "---" >> "$PROGRESS_FILE"
 fi
 
+if [ ! -f "$APPROVAL_QUEUE_FILE" ]; then
+  {
+    echo "# Jarvis Approval Queue"
+    echo "# Commands requiring manual approval should be appended by story iterations."
+    echo "# Format suggestion: [timestamp] [story] command | reason | fallback-attempted"
+    echo "---"
+  } > "$APPROVAL_QUEUE_FILE"
+fi
+
 echo "Starting Jarvis - Max iterations: $MAX_ITERATIONS"
 
 for i in $(seq 1 $MAX_ITERATIONS); do
@@ -316,6 +329,13 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "Jarvis completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
     exit 0
+  fi
+
+  if echo "$OUTPUT" | grep -q "<promise>BLOCKED</promise>"; then
+    echo ""
+    echo "Jarvis is blocked waiting for approvals. See: $APPROVAL_QUEUE_FILE"
+    echo "Blocked at iteration $i of $MAX_ITERATIONS"
+    exit 2
   fi
   
   echo "Iteration $i complete. Continuing..."

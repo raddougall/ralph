@@ -162,9 +162,9 @@ OPENAI_API_KEY=...
 
 The project launcher `scripts/jarvis/jarvis.sh` auto-loads this local file before invoking the shared Jarvis runtime.
 
-To customize Codex flags, set `JARVIS_CODEX_FLAGS` (default: `--full-auto --color never`):
+To customize Codex flags, set `JARVIS_CODEX_FLAGS` (default: `--sandbox workspace-write -a never --color never`):
 ```bash
-JARVIS_CODEX_FLAGS="--full-auto -m o3" JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh
+JARVIS_CODEX_FLAGS="--sandbox workspace-write -a never --color never -m o3" JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh
 ```
 
 Project scoping controls:
@@ -181,7 +181,7 @@ Safety defaults:
 
 Jarvis will:
 1. Create a feature branch (from PRD `branchName`)
-2. Pick the highest priority story where `passes: false`
+2. Pick the highest priority unblocked story where `passes: false` and `notes` does not start with `BLOCKED:`
 3. If ClickUp is configured, move the matching `[US-xxx]` task from `to do` to `in progress`
 4. Implement that single story
 5. Run the automated quality suite via CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
@@ -190,6 +190,17 @@ Jarvis will:
 8. If ClickUp is configured, attach commit link(s), add structured task activity notes (changes + test commands/outcomes + test file paths + smoke result), link related tasks (including bug/story links), and move the story task to `testing`
 9. Append learnings to `progress.txt`
 10. Repeat until all stories pass or max iterations reached
+
+## Unattended Iterations
+
+Jarvis defaults are tuned for unattended runs:
+
+- Codex runs with `-a never` by default, so no interactive approval pause interrupts overnight iterations.
+- If a story needs a command that requires manual approval, the story should be marked in `prd.json` notes with prefix `BLOCKED:` and the command request appended to `approval-queue.txt`.
+- Jarvis continues with other unblocked stories instead of waiting for approval.
+- If all remaining stories are blocked, the agent emits `<promise>BLOCKED</promise>` and Jarvis exits early with a blocked status.
+
+On context limits: each Jarvis iteration spawns a fresh Codex instance, so context does not accumulate across stories. Keeping stories small is still required.
 
 ## ClickUp Integration Defaults
 
@@ -205,6 +216,7 @@ Optional:
 - `CLICKUP_STATUS_TESTING` (default `testing`)
 - `JARVIS_CLICKUP_SYNC_ON_START` (default `1`: run `scripts/clickup/sync_clickup_to_prd.sh` before iterations)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default `0`: set `1` to fail fast if pre-sync fails)
+- `JARVIS_APPROVAL_QUEUE_FILE` (default `./approval-queue.txt`)
 - `GITHUB_REPO_URL` (used for commit URL links on tasks)
 
 This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
