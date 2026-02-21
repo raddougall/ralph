@@ -1,11 +1,11 @@
 ---
 name: ralph
-description: "Convert PRDs to prd.json format for the Ralph autonomous agent system. Use when you have an existing PRD and need to convert it to Ralph's JSON format. Triggers on: convert this prd, turn this into ralph format, create prd.json from this, ralph json."
+description: "Convert PRDs to prd.json format for the Jarvis (legacy Ralph) autonomous agent system. Use when you have an existing PRD and need to convert it to Jarvis JSON format. Triggers on: convert this prd, turn this into ralph format, create prd.json from this, ralph json, jarvis json."
 ---
 
-# Ralph PRD Converter
+# Jarvis PRD Converter (Legacy Skill Name: ralph)
 
-Converts existing PRDs to the prd.json format that Ralph uses for autonomous execution.
+Converts existing PRDs to the prd.json format that Jarvis (formerly Ralph) uses for autonomous execution.
 
 ---
 
@@ -44,9 +44,9 @@ Take a PRD (markdown file or text) and convert it to `prd.json` in your ralph di
 
 ## Story Size: The Number One Rule
 
-**Each story must be completable in ONE Ralph iteration (one context window).**
+**Each story must be completable in ONE Jarvis iteration (one context window).**
 
-Ralph spawns a fresh Amp instance per iteration with no memory of previous work. If a story is too big, the LLM runs out of context before finishing and produces broken code.
+Jarvis spawns a fresh Amp instance per iteration with no memory of previous work. If a story is too big, the LLM runs out of context before finishing and produces broken code.
 
 ### Right-sized stories:
 - Add a database column and migration
@@ -81,7 +81,7 @@ Stories execute in priority order. Earlier stories must not depend on later ones
 
 ## Acceptance Criteria: Must Be Verifiable
 
-Each criterion must be something Ralph can CHECK, not something vague.
+Each criterion must be something Jarvis can CHECK, not something vague.
 
 ### Good criteria (verifiable):
 - "Add `status` column to tasks table with default 'pending'"
@@ -111,7 +111,7 @@ For stories with testable logic, also include:
 "Verify in browser using dev-browser skill"
 ```
 
-Frontend stories are NOT complete until visually verified. Ralph will use the dev-browser skill to navigate to the page, interact with the UI, and confirm changes work.
+Frontend stories are NOT complete until visually verified. Jarvis will use the dev-browser skill to navigate to the page, interact with the UI, and confirm changes work.
 
 ---
 

@@ -4,7 +4,9 @@ set -euo pipefail
 cmd_name="$(basename "$0")"
 guard_dir="$(cd "$(dirname "$0")" && pwd)"
 
-if [ "${RALPH_ALLOW_SYSTEM_CHANGES:-0}" = "1" ]; then
+allow_system_changes="${JARVIS_ALLOW_SYSTEM_CHANGES:-${RALPH_ALLOW_SYSTEM_CHANGES:-0}}"
+
+if [ "$allow_system_changes" = "1" ]; then
   clean_path=""
   IFS=':' read -r -a path_parts <<< "$PATH"
   for path_part in "${path_parts[@]}"; do
@@ -28,6 +30,6 @@ if [ "${RALPH_ALLOW_SYSTEM_CHANGES:-0}" = "1" ]; then
 fi
 
 echo "Blocked system-level command '$cmd_name'." >&2
-echo "This Ralph run requires explicit user approval before host package manager changes." >&2
-echo "If approved, re-run with: RALPH_ALLOW_SYSTEM_CHANGES=1" >&2
+echo "This Jarvis run requires explicit user approval before host package manager changes." >&2
+echo "If approved, re-run with: JARVIS_ALLOW_SYSTEM_CHANGES=1 (legacy RALPH_ALLOW_SYSTEM_CHANGES also works)" >&2
 exit 97

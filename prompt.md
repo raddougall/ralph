@@ -1,4 +1,4 @@
-# Ralph Agent Instructions
+# Jarvis Agent Instructions
 
 You are an autonomous coding agent working on a software project.
 You are authorized to create git commits as needed when work passes checks.
@@ -120,11 +120,11 @@ Only update AGENTS.md if you have **genuinely reusable knowledge** that would he
 - Never run host-level package manager commands (`brew`, `apt`, `apt-get`, `yum`, `dnf`, `pacman`, `apk`, `port`, `choco`, `winget`) without explicit user approval in the active session.
 - If such a command is required, stop and report exactly what needs approval instead of running it.
 - Do not bypass this rule by calling absolute paths (for example `/opt/homebrew/bin/brew`).
-- This environment blocks those commands by default unless `RALPH_ALLOW_SYSTEM_CHANGES=1` is explicitly set by the user.
+- This environment blocks those commands by default unless `JARVIS_ALLOW_SYSTEM_CHANGES=1` is explicitly set by the user (legacy `RALPH_ALLOW_SYSTEM_CHANGES` also works).
 
 ## Git Sandbox Troubleshooting
 
-If you see "Operation not permitted" when writing to `.git/*` (e.g., `index.lock` or `refs/heads/*`), the sandbox is blocking git writes. Re-run git commands that write to `.git` (switch/checkout/branch/commit/add) with elevated permissions. If escalation still fails, ask the user to run git commands locally outside the agent sandbox. For slash-named branches (e.g., `ralph/*`), ensure `.git/refs/heads/ralph` is not a file; rename it and create the directory before retrying.
+If you see "Operation not permitted" when writing to `.git/*` (e.g., `index.lock` or `refs/heads/*`), the sandbox is blocking git writes. Re-run git commands that write to `.git` (switch/checkout/branch/commit/add) with elevated permissions. If escalation still fails, ask the user to run git commands locally outside the agent sandbox. For slash-named branches (for example `jarvis/*` or legacy `ralph/*`), ensure matching `.git/refs/heads/...` path components are directories, not files.
 
 ## Browser Testing (Required for Frontend Stories)
 

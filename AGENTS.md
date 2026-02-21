@@ -1,8 +1,8 @@
-# Ralph Agent Instructions
+# Jarvis Agent Instructions
 
 ## Overview
 
-Ralph is an autonomous AI agent loop that runs Amp (default) or Codex repeatedly until all PRD items are complete. Each iteration is a fresh agent instance with clean context.
+Jarvis is an autonomous AI agent loop that runs Amp (default) or Codex repeatedly until all PRD items are complete. Each iteration is a fresh agent instance with clean context.
 
 ## Commands
 
@@ -13,16 +13,20 @@ cd flowchart && npm run dev
 # Build the flowchart
 cd flowchart && npm run build
 
-# Run Ralph (from your project that has prd.json)
+# Run Jarvis (from your project that has prd.json)
+./jarvis.sh [max_iterations]
+
+# Legacy compatibility command
 ./ralph.sh [max_iterations]
 ```
 
 ## Key Files
 
-- `ralph.sh` - The bash loop that spawns fresh Amp instances
+- `jarvis.sh` - The primary bash loop that spawns fresh Amp/Codex instances
+- `ralph.sh` - Backward-compatibility shim that forwards to `jarvis.sh`
 - `prompt.md` - Instructions given to each Amp instance
 - `prd.json.example` - Example PRD format
-- `flowchart/` - Interactive React Flow diagram explaining how Ralph works
+- `flowchart/` - Interactive React Flow diagram explaining how Jarvis works
 
 ## Flowchart
 
@@ -41,7 +45,7 @@ npm run dev
 - Memory persists via git history, `progress.txt`, and `prd.json`
 - Stories should be small enough to complete in one context window
 - For Codex runs, detect completion from `--output-last-message` content, not streamed logs, to avoid false `<promise>COMPLETE</promise>` matches.
-- Host package manager commands are guarded through `guard-bin/`; leave `RALPH_ALLOW_SYSTEM_CHANGES=0` unless the user explicitly approves system changes.
-- Run Ralph with `RALPH_PROJECT_DIR` (or from project cwd) so `prd.json`, `progress.txt`, archives, and logs stay project-local.
+- Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
+- Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.
 - Always update AGENTS.md with discovered patterns for future iterations
 - If ClickUp credentials are configured, every story must use `to do` as the ready queue (`backlog` is ideas only), move status `in progress` -> `testing`, include commit linkage, and include an activity note with implementation + testing outcome.

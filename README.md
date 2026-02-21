@@ -1,14 +1,12 @@
-| `flowchart/` | Interactive visualization of how Ralph works |
-| `scripts/clickup/` | Shared ClickUp OAuth + PRD sync scripts used by project wrappers |
-# Ralph
+# Jarvis
 
-![Ralph](ralph.webp)
+![Jarvis](ralph.webp)
 
-Ralph is an autonomous AI agent loop that runs [Amp](https://ampcode.com) (default) or Codex repeatedly until all PRD items are complete. Each iteration is a fresh agent instance with clean context. Memory persists via git history, `progress.txt`, and `prd.json`.
+Jarvis is an autonomous AI agent loop that runs [Amp](https://ampcode.com) (default) or Codex repeatedly until all PRD items are complete. Each iteration is a fresh agent instance with clean context. Memory persists via git history, `progress.txt`, and `prd.json`.
 
 Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
-[Read my in-depth article on how I use Ralph](https://x.com/ryancarson/status/2008548371712135632)
+[Read my in-depth article on how I use Ralph/Jarvis](https://x.com/ryancarson/status/2008548371712135632)
 
 ## Prerequisites
 
@@ -18,39 +16,39 @@ Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
 ## Setup
 
-### Option 1: Use master Ralph from each project (recommended)
+### Option 1: Use master Jarvis from each project (recommended)
 
-Create a tiny project-local launcher (example path: `scripts/ralph/ralph.sh`) that calls this repo's `ralph.sh`:
+Create a tiny project-local launcher (example path: `scripts/jarvis/jarvis.sh`) that calls this repo's `jarvis.sh`:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RALPH_HOME="${RALPH_HOME:-$HOME/CodeDev/Ralph}"
-export RALPH_PROJECT_DIR="$PROJECT_ROOT"
-exec "$RALPH_HOME/ralph.sh" "$@"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/CodeDev/Jarvis}"
+export JARVIS_PROJECT_DIR="$PROJECT_ROOT"
+exec "$JARVIS_HOME/jarvis.sh" "$@"
 ```
 
-This avoids duplicating Ralph code into every project while keeping all writes in the project folder.
+This avoids duplicating Jarvis code into every project while keeping all writes in the project folder.
 
 You can generate this launcher automatically from the target project root:
 
 ```bash
-~/CodeDev/Ralph/scripts/install-project-launcher.sh .
+~/CodeDev/Jarvis/scripts/install-project-launcher.sh .
 ```
 
-This installer also creates project-local ClickUp wrappers under `scripts/clickup/` that point to shared scripts in this Ralph repo.
+This installer also creates project-local ClickUp wrappers under `scripts/clickup/` that point to shared scripts in this Jarvis repo.
 
 ### Option 2: Copy to your project
 
-Copy the ralph files into your project:
+Copy the Jarvis files into your project:
 
 ```bash
 # From your project root
-mkdir -p scripts/ralph
-cp /path/to/ralph/ralph.sh scripts/ralph/
-cp /path/to/ralph/prompt.md scripts/ralph/
-chmod +x scripts/ralph/ralph.sh
+mkdir -p scripts/jarvis
+cp /path/to/jarvis/jarvis.sh scripts/jarvis/
+cp /path/to/jarvis/prompt.md scripts/jarvis/
+chmod +x scripts/jarvis/jarvis.sh
 ```
 
 ### Option 3: Install skills globally (Amp only)
@@ -83,7 +81,7 @@ Add to `~/.config/amp/settings.json`:
 }
 ```
 
-This enables automatic handoff when context fills up, allowing Ralph to handle large stories that exceed a single context window.
+This enables automatic handoff when context fills up, allowing Jarvis to handle large stories that exceed a single context window.
 
 ## Workflow
 
@@ -97,9 +95,9 @@ Load the prd skill and create a PRD for [your feature description]
 
 Answer the clarifying questions. The skill saves output to `tasks/prd-[feature-name].md`.
 
-### 2. Convert PRD to Ralph format
+### 2. Convert PRD to Jarvis format
 
-Use the Ralph skill to convert the markdown PRD to JSON:
+Use the Jarvis skill (legacy skill name: `ralph`) to convert the markdown PRD to JSON:
 
 ```
 Load the ralph skill and convert tasks/prd-[feature-name].md to prd.json
@@ -108,30 +106,36 @@ Load the ralph skill and convert tasks/prd-[feature-name].md to prd.json
 This creates `prd.json` with user stories structured for autonomous execution.
 If you're using Codex, you can generate the PRD manually or with your preferred tooling.
 
-### 3. Run Ralph
+### 3. Run Jarvis
 
 ```bash
 # Amp (default)
-./scripts/ralph/ralph.sh [max_iterations]
+./scripts/jarvis/jarvis.sh [max_iterations]
 
 # Codex
+JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh [max_iterations]
+```
+
+Legacy compatibility command still works:
+
+```bash
 RALPH_AGENT=codex ./scripts/ralph/ralph.sh [max_iterations]
 ```
 
 Default is 10 iterations.
 
-To customize Codex flags, set `RALPH_CODEX_FLAGS` (default: `--full-auto --color never`):
+To customize Codex flags, set `JARVIS_CODEX_FLAGS` (default: `--full-auto --color never`):
 ```bash
-RALPH_CODEX_FLAGS="--full-auto -m o3" RALPH_AGENT=codex ./scripts/ralph/ralph.sh
+JARVIS_CODEX_FLAGS="--full-auto -m o3" JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh
 ```
 
 Project scoping controls:
 
-- `RALPH_PROJECT_DIR` (default: current working directory)
-- `RALPH_PROMPT_FILE` (optional explicit prompt path)
-- If `RALPH_PROMPT_FILE` is unset and `<project>/.ralph/prompt.md` exists, Ralph uses that project-local prompt override.
+- `JARVIS_PROJECT_DIR` (default: current working directory)
+- `JARVIS_PROMPT_FILE` (optional explicit prompt path)
+- If `JARVIS_PROMPT_FILE` is unset and `<project>/.jarvis/prompt.md` exists, Jarvis uses that project-local prompt override. Legacy `.ralph/prompt.md` is still supported.
 
-Ralph will:
+Jarvis will:
 1. Create a feature branch (from PRD `branchName`)
 2. Pick the highest priority story where `passes: false`
 3. If ClickUp is configured, move the matching `[US-xxx]` task from `to do` to `in progress`
@@ -145,7 +149,7 @@ Ralph will:
 
 ## ClickUp Integration Defaults
 
-When these environment variables are set, Ralph treats ClickUp updates as required behavior for each story:
+When these environment variables are set, Jarvis treats ClickUp updates as required behavior for each story:
 
 - `CLICKUP_TOKEN`
 - `CLICKUP_LIST_ID` or `CLICKUP_LIST_URL`
@@ -163,18 +167,19 @@ This keeps your manual QA loop tight: `to do` is the active ready queue, `backlo
 
 | File | Purpose |
 |------|---------|
-| `ralph.sh` | The bash loop that spawns fresh Amp or Codex instances |
+| `jarvis.sh` | The bash loop that spawns fresh Amp or Codex instances |
 | `prompt.md` | Instructions given to each agent instance |
 | `prd.json` | User stories with `passes` status (the task list) |
 | `prd.json.example` | Example PRD format for reference |
 | `progress.txt` | Append-only learnings for future iterations |
 | `skills/prd/` | Skill for generating PRDs |
-| `skills/ralph/` | Skill for converting PRDs to JSON |
-| `flowchart/` | Interactive visualization of how Ralph works |
+| `skills/ralph/` | Legacy skill name for converting PRDs to JSON |
+| `flowchart/` | Interactive visualization of how Jarvis works |
+| `scripts/clickup/` | Shared ClickUp OAuth + PRD sync scripts used by project wrappers |
 
 ## Flowchart
 
-[![Ralph Flowchart](ralph-flowchart.png)](https://snarktank.github.io/ralph/)
+[![Jarvis Flowchart](ralph-flowchart.png)](https://snarktank.github.io/ralph/)
 
 **[View Interactive Flowchart](https://snarktank.github.io/ralph/)** - Click through to see each step with animations.
 
@@ -212,7 +217,7 @@ Too big (split these):
 
 ### AGENTS.md Updates Are Critical
 
-After each iteration, Ralph updates the relevant `AGENTS.md` files with learnings. This is key because Amp automatically reads these files, so future iterations (and future human developers) benefit from discovered patterns, gotchas, and conventions.
+After each iteration, Jarvis updates the relevant `AGENTS.md` files with learnings. This is key because Amp automatically reads these files, so future iterations (and future human developers) benefit from discovered patterns, gotchas, and conventions.
 
 Examples of what to add to AGENTS.md:
 - Patterns discovered ("this codebase uses X for Y")
@@ -221,18 +226,18 @@ Examples of what to add to AGENTS.md:
 
 ### Feedback Loops
 
-Ralph only works if there are feedback loops:
+Jarvis only works if there are feedback loops:
 - Typecheck catches type errors
 - Tests verify behavior
 - CI must stay green (broken code compounds across iterations)
 
 ### Browser Verification for UI Stories
 
-Frontend stories must include "Verify in browser using dev-browser skill" in acceptance criteria. Ralph will use the dev-browser skill to navigate to the page, interact with the UI, and confirm changes work.
+Frontend stories must include "Verify in browser using dev-browser skill" in acceptance criteria. Jarvis will use the dev-browser skill to navigate to the page, interact with the UI, and confirm changes work.
 
 ### Stop Condition
 
-When all stories have `passes: true`, Ralph outputs `<promise>COMPLETE</promise>` and the loop exits.
+When all stories have `passes: true`, Jarvis outputs `<promise>COMPLETE</promise>` and the loop exits.
 
 ## Debugging
 
@@ -251,14 +256,14 @@ git log --oneline -10
 
 ## Customizing prompt.md
 
-Edit `prompt.md` to customize Ralph's behavior for your project:
+Edit `prompt.md` to customize Jarvis's behavior for your project:
 - Add project-specific quality check commands
 - Include codebase conventions
 - Add common gotchas for your stack
 
 ## Archiving
 
-Ralph automatically archives previous runs when you start a new feature (different `branchName`). Archives are saved to `archive/YYYY-MM-DD-feature-name/`.
+Jarvis automatically archives previous runs when you start a new feature (different `branchName`). Archives are saved to `archive/YYYY-MM-DD-feature-name/`.
 
 ## References
 

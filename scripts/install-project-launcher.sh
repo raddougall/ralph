@@ -3,61 +3,81 @@ set -euo pipefail
 
 TARGET_DIR="${1:-$(pwd)}"
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+TARGET_JARVIS_DIR="$TARGET_DIR/scripts/jarvis"
 TARGET_RALPH_DIR="$TARGET_DIR/scripts/ralph"
 TARGET_CLICKUP_DIR="$TARGET_DIR/scripts/clickup"
 
-mkdir -p "$TARGET_RALPH_DIR" "$TARGET_CLICKUP_DIR"
+mkdir -p "$TARGET_JARVIS_DIR" "$TARGET_RALPH_DIR" "$TARGET_CLICKUP_DIR"
 
-cat > "$TARGET_RALPH_DIR/ralph.sh" <<'LAUNCHER'
+cat > "$TARGET_JARVIS_DIR/jarvis.sh" <<'LAUNCHER'
 #!/usr/bin/env bash
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RALPH_HOME="${RALPH_HOME:-$HOME/CodeDev/Ralph}"
-MASTER_RALPH="$RALPH_HOME/ralph.sh"
+JARVIS_HOME="${JARVIS_HOME:-${RALPH_HOME:-}}"
+if [ -z "$JARVIS_HOME" ]; then
+  if [ -d "$HOME/CodeDev/Jarvis" ]; then
+    JARVIS_HOME="$HOME/CodeDev/Jarvis"
+  else
+    JARVIS_HOME="$HOME/CodeDev/Ralph"
+  fi
+fi
+MASTER_JARVIS="$JARVIS_HOME/jarvis.sh"
 
-if [ ! -x "$MASTER_RALPH" ]; then
-  echo "Master Ralph launcher not found or not executable: $MASTER_RALPH" >&2
-  echo "Set RALPH_HOME to your Ralph repo path (example: $HOME/CodeDev/Ralph)." >&2
+if [ ! -x "$MASTER_JARVIS" ]; then
+  echo "Master Jarvis launcher not found or not executable: $MASTER_JARVIS" >&2
+  echo "Set JARVIS_HOME (or legacy RALPH_HOME) to your Jarvis repo path." >&2
   exit 1
 fi
 
-export RALPH_PROJECT_DIR="$PROJECT_ROOT"
-exec "$MASTER_RALPH" "$@"
+export JARVIS_PROJECT_DIR="$PROJECT_ROOT"
+# Backward-compat for scripts that still read RALPH_PROJECT_DIR.
+export RALPH_PROJECT_DIR="${RALPH_PROJECT_DIR:-$JARVIS_PROJECT_DIR}"
+exec "$MASTER_JARVIS" "$@"
 LAUNCHER
+chmod +x "$TARGET_JARVIS_DIR/jarvis.sh"
+
+cat > "$TARGET_RALPH_DIR/ralph.sh" <<'RALPH_SHIM'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/../jarvis/jarvis.sh" "$@"
+RALPH_SHIM
 chmod +x "$TARGET_RALPH_DIR/ralph.sh"
 
-cat > "$TARGET_RALPH_DIR/README.md" <<'DOC'
-# Ralph Launcher (Project-Local)
+cat > "$TARGET_JARVIS_DIR/README.md" <<'DOC'
+# Jarvis Launcher (Project-Local)
 
-This project uses the shared master Ralph runtime from `~/CodeDev/Ralph`.
+This project uses the shared master Jarvis runtime.
 
-- Launcher: `scripts/ralph/ralph.sh`
-- Default shared runtime path: `$HOME/CodeDev/Ralph`
-- Override path with: `RALPH_HOME=/path/to/Ralph`
+- Primary launcher: `scripts/jarvis/jarvis.sh`
+- Legacy compatibility launcher: `scripts/ralph/ralph.sh`
+- Default shared runtime path: `$HOME/CodeDev/Jarvis` (fallback `$HOME/CodeDev/Ralph`)
+- Override path with: `JARVIS_HOME=/path/to/Jarvis` (legacy `RALPH_HOME` still supported)
 
-The launcher pins Ralph execution to this repo by exporting:
+The launcher pins execution to this repo by exporting:
 
-- `RALPH_PROJECT_DIR=<this repo root>`
+- `JARVIS_PROJECT_DIR=<this repo root>`
 
 That means all working files (`prd.json`, `progress.txt`, `archive/`, logs, branch tracking) stay inside this project directory.
 
 ## Usage
 
 ```bash
-RALPH_AGENT=codex ./scripts/ralph/ralph.sh
+JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh
 ```
 
-Optional network-enabled Codex runs:
+Legacy equivalent (still works):
 
 ```bash
-RALPH_AGENT=codex RALPH_CODEX_ENABLE_NETWORK=1 ./scripts/ralph/ralph.sh
+RALPH_AGENT=codex ./scripts/ralph/ralph.sh
 ```
 
 ## Optional per-project prompt override
 
-If you need project-specific prompt customization without forking the full Ralph runtime,
-create `.ralph/prompt.md` in this project.
+If you need project-specific prompt customization without forking the full runtime,
+create `.jarvis/prompt.md` in this project (legacy `.ralph/prompt.md` also supported).
 DOC
 
 cat > "$TARGET_CLICKUP_DIR/get_oauth_token.sh" <<'CLICKUP_OAUTH'
@@ -65,12 +85,19 @@ cat > "$TARGET_CLICKUP_DIR/get_oauth_token.sh" <<'CLICKUP_OAUTH'
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RALPH_HOME="${RALPH_HOME:-$HOME/CodeDev/Ralph}"
-MASTER_SCRIPT="$RALPH_HOME/scripts/clickup/get_oauth_token.sh"
+JARVIS_HOME="${JARVIS_HOME:-${RALPH_HOME:-}}"
+if [ -z "$JARVIS_HOME" ]; then
+  if [ -d "$HOME/CodeDev/Jarvis" ]; then
+    JARVIS_HOME="$HOME/CodeDev/Jarvis"
+  else
+    JARVIS_HOME="$HOME/CodeDev/Ralph"
+  fi
+fi
+MASTER_SCRIPT="$JARVIS_HOME/scripts/clickup/get_oauth_token.sh"
 
 if [ ! -x "$MASTER_SCRIPT" ]; then
   echo "Master ClickUp script not found or not executable: $MASTER_SCRIPT" >&2
-  echo "Set RALPH_HOME to your Ralph repo path (example: $HOME/CodeDev/Ralph)." >&2
+  echo "Set JARVIS_HOME (or legacy RALPH_HOME) to your Jarvis repo path." >&2
   exit 1
 fi
 
@@ -84,12 +111,19 @@ cat > "$TARGET_CLICKUP_DIR/sync_prd_to_clickup.sh" <<'CLICKUP_SYNC'
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RALPH_HOME="${RALPH_HOME:-$HOME/CodeDev/Ralph}"
-MASTER_SCRIPT="$RALPH_HOME/scripts/clickup/sync_prd_to_clickup.sh"
+JARVIS_HOME="${JARVIS_HOME:-${RALPH_HOME:-}}"
+if [ -z "$JARVIS_HOME" ]; then
+  if [ -d "$HOME/CodeDev/Jarvis" ]; then
+    JARVIS_HOME="$HOME/CodeDev/Jarvis"
+  else
+    JARVIS_HOME="$HOME/CodeDev/Ralph"
+  fi
+fi
+MASTER_SCRIPT="$JARVIS_HOME/scripts/clickup/sync_prd_to_clickup.sh"
 
 if [ ! -x "$MASTER_SCRIPT" ]; then
   echo "Master ClickUp script not found or not executable: $MASTER_SCRIPT" >&2
-  echo "Set RALPH_HOME to your Ralph repo path (example: $HOME/CodeDev/Ralph)." >&2
+  echo "Set JARVIS_HOME (or legacy RALPH_HOME) to your Jarvis repo path." >&2
   exit 1
 fi
 
@@ -101,7 +135,7 @@ chmod +x "$TARGET_CLICKUP_DIR/sync_prd_to_clickup.sh"
 cat > "$TARGET_CLICKUP_DIR/README.md" <<'CLICKUP_DOC'
 # ClickUp Scripts (Project-Local Wrappers)
 
-This project uses shared ClickUp scripts from `~/CodeDev/Ralph/scripts/clickup`.
+This project uses shared ClickUp scripts from Jarvis.
 
 - `scripts/clickup/get_oauth_token.sh`
 - `scripts/clickup/sync_prd_to_clickup.sh`
@@ -146,5 +180,6 @@ CLICKUP_DRY_RUN=0
 CLICKUP_ENV
 fi
 
-echo "Installed launcher at: $TARGET_RALPH_DIR"
+echo "Installed Jarvis launcher at: $TARGET_JARVIS_DIR"
+echo "Installed Ralph compatibility launcher at: $TARGET_RALPH_DIR"
 echo "Installed ClickUp wrappers at: $TARGET_CLICKUP_DIR"
