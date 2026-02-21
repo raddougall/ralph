@@ -152,6 +152,8 @@ Recommended setup in each project:
 cp scripts/jarvis/.env.jarvis.example scripts/jarvis/.env.jarvis.local
 ```
 
+`scripts/install-project-launcher.sh` now creates `scripts/jarvis/.env.jarvis.local` automatically if missing.
+
 Then set your key in `scripts/jarvis/.env.jarvis.local`:
 
 ```bash

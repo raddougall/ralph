@@ -9,6 +9,18 @@ TARGET_CLICKUP_DIR="$TARGET_DIR/scripts/clickup"
 
 mkdir -p "$TARGET_JARVIS_DIR" "$TARGET_RALPH_DIR" "$TARGET_CLICKUP_DIR"
 
+ensure_env_var() {
+  local file="$1"
+  local key="$2"
+  local default_value="${3:-}"
+  if [ ! -f "$file" ]; then
+    touch "$file"
+  fi
+  if ! grep -Eq "^${key}=" "$file"; then
+    printf '%s=%s\n' "$key" "$default_value" >> "$file"
+  fi
+}
+
 cat > "$TARGET_JARVIS_DIR/jarvis.sh" <<'LAUNCHER'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -112,6 +124,11 @@ OPENAI_API_KEY=
 JARVIS_ENV
 fi
 
+if [ ! -f "$TARGET_JARVIS_DIR/.env.jarvis.local" ]; then
+  cp "$TARGET_JARVIS_DIR/.env.jarvis.example" "$TARGET_JARVIS_DIR/.env.jarvis.local"
+fi
+ensure_env_var "$TARGET_JARVIS_DIR/.env.jarvis.local" "OPENAI_API_KEY" ""
+
 cat > "$TARGET_CLICKUP_DIR/get_oauth_token.sh" <<'CLICKUP_OAUTH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -204,11 +221,7 @@ These local wrappers execute the master scripts while keeping defaults project-l
 
 ## Local env file
 
-Use a project-local env file:
-
-```bash
-cp scripts/clickup/.env.clickup.example scripts/clickup/.env.clickup
-```
+Use the project-local env file (auto-created by installer):
 
 Then load it before running commands:
 
@@ -241,7 +254,9 @@ CLICKUP_CLIENT_ID=
 CLICKUP_CLIENT_SECRET=
 CLICKUP_REDIRECT_URI=http://localhost:3333/clickup/callback
 CLICKUP_AUTH_CODE=
+CLICKUP_API_BASE=https://api.clickup.com/api/v2
 CLICKUP_TOKEN=
+CLICKUP_LIST_ID=
 CLICKUP_LIST_URL=
 CLICKUP_STATUS_TODO=to do
 CLICKUP_STATUS_IN_PROGRESS=in progress
@@ -256,6 +271,50 @@ CLICKUP_MOVE_TO_IN_PROGRESS=1
 CLICKUP_DRY_RUN=0
 CLICKUP_ENV
 fi
+
+if [ ! -f "$TARGET_CLICKUP_DIR/.env.clickup" ]; then
+  cp "$TARGET_CLICKUP_DIR/.env.clickup.example" "$TARGET_CLICKUP_DIR/.env.clickup"
+fi
+
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_CLIENT_ID" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_CLIENT_SECRET" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_REDIRECT_URI" "http://localhost:3333/clickup/callback"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_AUTH_CODE" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_API_BASE" "https://api.clickup.com/api/v2"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_TOKEN" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_LIST_ID" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_LIST_URL" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_TODO" "to do"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_IN_PROGRESS" "in progress"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_TESTING" "testing"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_PRUNE_MISSING" "0"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_SYNC_APPEND_PROGRESS" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_GITHUB_REPO_URL" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_ATTACH_COMMIT_LINKS" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_POST_TESTING_COMMENT" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_MOVE_TO_TESTING" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_MOVE_TO_IN_PROGRESS" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_DRY_RUN" "0"
+
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_CLIENT_ID" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_CLIENT_SECRET" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_REDIRECT_URI" "http://localhost:3333/clickup/callback"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_AUTH_CODE" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_API_BASE" "https://api.clickup.com/api/v2"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_TOKEN" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_LIST_ID" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_LIST_URL" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_TODO" "to do"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_IN_PROGRESS" "in progress"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_TESTING" "testing"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_PRUNE_MISSING" "0"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_SYNC_APPEND_PROGRESS" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_GITHUB_REPO_URL" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_ATTACH_COMMIT_LINKS" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_POST_TESTING_COMMENT" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_MOVE_TO_TESTING" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_MOVE_TO_IN_PROGRESS" "1"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_DRY_RUN" "0"
 
 ensure_gitignore_entry() {
   local entry="$1"

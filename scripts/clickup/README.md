@@ -6,7 +6,7 @@ Recommended usage: run the project-local wrappers created by `scripts/install-pr
 
 ## 1) Get an OAuth access token (if you are using OAuth app credentials)
 
-You can keep secrets in a local file:
+You can keep secrets in a local file (auto-created by `scripts/install-project-launcher.sh` when missing):
 
 ```bash
 cp scripts/clickup/.env.clickup.example scripts/clickup/.env.clickup
