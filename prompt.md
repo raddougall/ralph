@@ -11,7 +11,7 @@ Before starting, check whether a relevant skill exists under `skills/` in this r
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
 4. Pick the **highest priority** user story where `passes: false`
-5. If ClickUp is configured (see below), find the matching task for the story and move it to `in progress`
+5. If ClickUp is configured (see below), find the matching task for the story and move it from `to do` to `in progress`
 6. Implement that single user story
 7. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)
 8. Update AGENTS.md files if you discover reusable patterns (see below)
@@ -30,6 +30,7 @@ If these env vars exist, you MUST keep ClickUp in sync for every story:
 Optional env vars:
 
 - `CLICKUP_API_BASE` (default: `https://api.clickup.com/api/v2`)
+- `CLICKUP_STATUS_TODO` (default: `to do`)
 - `CLICKUP_STATUS_IN_PROGRESS` (default: `in progress`)
 - `CLICKUP_STATUS_TESTING` (default: `testing`)
 - `GITHUB_REPO_URL` (for commit links; if missing, derive from `git remote origin`)
@@ -37,13 +38,14 @@ Optional env vars:
 Required behavior per story:
 
 1. Resolve story task in the target list by name prefix `[US-xxx]`.
-2. Move task to `in progress` when implementation starts.
-3. After commit, add GitHub commit URL to the task (description section like `GitHub Commits:` or comment).
-4. Add an activity comment with:
+2. Treat `to do` as the ready-to-work queue and keep `backlog` for future ideas only.
+3. Move task to `in progress` when implementation starts.
+4. After commit, add GitHub commit URL to the task (description section like `GitHub Commits:` or comment).
+5. Add an activity comment with:
    - what you changed
    - what tests you ran
    - outcome/result
-5. Move task to `testing` when it is ready for manual validation.
+6. Move task to `testing` when it is ready for manual validation.
 
 If ClickUp config is missing, continue normal implementation and explicitly report ClickUp was skipped due to missing configuration.
 
