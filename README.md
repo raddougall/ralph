@@ -31,6 +31,12 @@ exec "$RALPH_HOME/ralph.sh" "$@"
 
 This avoids duplicating Ralph code into every project while keeping all writes in the project folder.
 
+You can generate this launcher automatically from the target project root:
+
+```bash
+~/CodeDev/Ralph/scripts/install-project-launcher.sh .
+```
+
 ### Option 2: Copy to your project
 
 Copy the ralph files into your project:
