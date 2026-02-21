@@ -42,5 +42,6 @@ npm run dev
 - Stories should be small enough to complete in one context window
 - For Codex runs, detect completion from `--output-last-message` content, not streamed logs, to avoid false `<promise>COMPLETE</promise>` matches.
 - Host package manager commands are guarded through `guard-bin/`; leave `RALPH_ALLOW_SYSTEM_CHANGES=0` unless the user explicitly approves system changes.
+- Run Ralph with `RALPH_PROJECT_DIR` (or from project cwd) so `prd.json`, `progress.txt`, archives, and logs stay project-local.
 - Always update AGENTS.md with discovered patterns for future iterations
 - If ClickUp credentials are configured, every story must use `to do` as the ready queue (`backlog` is ideas only), move status `in progress` -> `testing`, include commit linkage, and include an activity note with implementation + testing outcome.

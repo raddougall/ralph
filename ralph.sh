@@ -10,11 +10,25 @@ AMP_FLAGS=${RALPH_AMP_FLAGS:---dangerously-allow-all}
 CODEX_FLAGS=${RALPH_CODEX_FLAGS:---full-auto --color never}
 CODEX_BIN=${RALPH_CODEX_BIN:-codex}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PRD_FILE="$SCRIPT_DIR/prd.json"
-PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
-ARCHIVE_DIR="$SCRIPT_DIR/archive"
-LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
-LOG_FILE="$SCRIPT_DIR/ralph.log"
+PROJECT_DIR="${RALPH_PROJECT_DIR:-$(pwd)}"
+PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+PRD_FILE="$PROJECT_DIR/prd.json"
+PROGRESS_FILE="$PROJECT_DIR/progress.txt"
+ARCHIVE_DIR="$PROJECT_DIR/archive"
+LAST_BRANCH_FILE="$PROJECT_DIR/.last-branch"
+LOG_FILE="$PROJECT_DIR/ralph.log"
+PROMPT_FILE="${RALPH_PROMPT_FILE:-}"
+if [ -z "$PROMPT_FILE" ]; then
+  if [ -f "$PROJECT_DIR/.ralph/prompt.md" ]; then
+    PROMPT_FILE="$PROJECT_DIR/.ralph/prompt.md"
+  else
+    PROMPT_FILE="$SCRIPT_DIR/prompt.md"
+  fi
+fi
+if [ ! -f "$PROMPT_FILE" ]; then
+  echo "Prompt file not found: $PROMPT_FILE" >&2
+  exit 1
+fi
 
 # Guardrail: block host-level package manager mutations unless explicitly allowed.
 if [ -d "$SCRIPT_DIR/guard-bin" ]; then
@@ -47,7 +61,7 @@ can_write_dir() {
 }
 
 if ! can_write_dir "$CODEX_HOME/sessions"; then
-  FALLBACK_CODEX_HOME="$SCRIPT_DIR/.codex"
+  FALLBACK_CODEX_HOME="$PROJECT_DIR/.codex"
   export CODEX_HOME="$FALLBACK_CODEX_HOME"
   if ! can_write_dir "$CODEX_HOME/sessions"; then
     echo "Warning: CODEX_HOME not writable at $CODEX_HOME (and fallback failed)" >&2
@@ -112,6 +126,8 @@ if [ -n "$RALPH_DEBUG_ENV" ]; then
     echo "--- Paths"
     echo "PWD=$(pwd)"
     echo "SCRIPT_DIR=$SCRIPT_DIR"
+    echo "PROJECT_DIR=$PROJECT_DIR"
+    echo "PROMPT_FILE=$PROMPT_FILE"
     echo "HOME=$HOME"
     echo "CODEX_HOME=$CODEX_HOME"
     echo "XDG_STATE_HOME=$XDG_STATE_HOME"
@@ -184,21 +200,21 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   
   # Run the selected agent with the ralph prompt
   if [ "$AGENT" = "codex" ]; then
-    LAST_MESSAGE_FILE=$(mktemp "${SCRIPT_DIR}/.codex-last-message.XXXXXX")
+    LAST_MESSAGE_FILE=$(mktemp "${PROJECT_DIR}/.codex-last-message.XXXXXX")
     if [ -n "$FOLLOW_LOG" ]; then
-      cat "$SCRIPT_DIR/prompt.md" | "$CODEX_BIN" exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
+      cat "$PROMPT_FILE" | "$CODEX_BIN" exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
     else
-      cat "$SCRIPT_DIR/prompt.md" | "$CODEX_BIN" exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
+      cat "$PROMPT_FILE" | "$CODEX_BIN" exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
     fi
     OUTPUT=$(cat "$LAST_MESSAGE_FILE" 2>/dev/null || true)
     rm -f "$LAST_MESSAGE_FILE" 2>/dev/null || true
   elif [ "$AGENT" = "amp" ]; then
     if [ -n "$FOLLOW_LOG" ]; then
       LOG_OFFSET=$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)
-      cat "$SCRIPT_DIR/prompt.md" | amp $AMP_FLAGS 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
+      cat "$PROMPT_FILE" | amp $AMP_FLAGS 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
       OUTPUT=$(tail -c +$((LOG_OFFSET+1)) "$LOG_FILE" 2>/dev/null || true)
     else
-      OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | amp $AMP_FLAGS 2>&1 | tee "${TEE_ARGS[@]}") || true
+      OUTPUT=$(cat "$PROMPT_FILE" | amp $AMP_FLAGS 2>&1 | tee "${TEE_ARGS[@]}") || true
     fi
   else
     echo "Unknown RALPH_AGENT: $AGENT (expected 'amp' or 'codex')" >&2

@@ -16,7 +16,22 @@ Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
 ## Setup
 
-### Option 1: Copy to your project
+### Option 1: Use master Ralph from each project (recommended)
+
+Create a tiny project-local launcher (example path: `scripts/ralph/ralph.sh`) that calls this repo's `ralph.sh`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RALPH_HOME="${RALPH_HOME:-$HOME/CodeDev/Ralph}"
+export RALPH_PROJECT_DIR="$PROJECT_ROOT"
+exec "$RALPH_HOME/ralph.sh" "$@"
+```
+
+This avoids duplicating Ralph code into every project while keeping all writes in the project folder.
+
+### Option 2: Copy to your project
 
 Copy the ralph files into your project:
 
@@ -28,7 +43,7 @@ cp /path/to/ralph/prompt.md scripts/ralph/
 chmod +x scripts/ralph/ralph.sh
 ```
 
-### Option 2: Install skills globally (Amp only)
+### Option 3: Install skills globally (Amp only)
 
 Copy the skills to your Amp config for use across all projects:
 
@@ -37,7 +52,7 @@ cp -r skills/prd ~/.config/amp/skills/
 cp -r skills/ralph ~/.config/amp/skills/
 ```
 
-### Option 3: Install skills for Codex
+### Option 4: Install skills for Codex
 
 Codex only loads skills from `$CODEX_HOME/skills` (default: `~/.codex/skills`).
 Symlink this repo’s skills into Codex:
@@ -99,6 +114,12 @@ To customize Codex flags, set `RALPH_CODEX_FLAGS` (default: `--full-auto --color
 ```bash
 RALPH_CODEX_FLAGS="--full-auto -m o3" RALPH_AGENT=codex ./scripts/ralph/ralph.sh
 ```
+
+Project scoping controls:
+
+- `RALPH_PROJECT_DIR` (default: current working directory)
+- `RALPH_PROMPT_FILE` (optional explicit prompt path)
+- If `RALPH_PROMPT_FILE` is unset and `<project>/.ralph/prompt.md` exists, Ralph uses that project-local prompt override.
 
 Ralph will:
 1. Create a feature branch (from PRD `branchName`)
