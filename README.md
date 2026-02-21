@@ -1,3 +1,5 @@
+| `flowchart/` | Interactive visualization of how Ralph works |
+| `scripts/clickup/` | Shared ClickUp OAuth + PRD sync scripts used by project wrappers |
 # Ralph
 
 ![Ralph](ralph.webp)
@@ -36,6 +38,8 @@ You can generate this launcher automatically from the target project root:
 ```bash
 ~/CodeDev/Ralph/scripts/install-project-launcher.sh .
 ```
+
+This installer also creates project-local ClickUp wrappers under `scripts/clickup/` that point to shared scripts in this Ralph repo.
 
 ### Option 2: Copy to your project
 
