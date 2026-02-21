@@ -103,12 +103,29 @@ RALPH_CODEX_FLAGS="--full-auto -m o3" RALPH_AGENT=codex ./scripts/ralph/ralph.sh
 Ralph will:
 1. Create a feature branch (from PRD `branchName`)
 2. Pick the highest priority story where `passes: false`
-3. Implement that single story
-4. Run quality checks (typecheck, tests)
-5. Commit if checks pass
-6. Update `prd.json` to mark story as `passes: true`
-7. Append learnings to `progress.txt`
-8. Repeat until all stories pass or max iterations reached
+3. If ClickUp is configured, move the matching `[US-xxx]` task to `in progress`
+4. Implement that single story
+5. Run quality checks (typecheck, tests)
+6. Commit if checks pass
+7. Update `prd.json` to mark story as `passes: true`
+8. If ClickUp is configured, attach commit link(s), add task activity notes (changes + tests + outcome), and move task to `testing`
+9. Append learnings to `progress.txt`
+10. Repeat until all stories pass or max iterations reached
+
+## ClickUp Integration Defaults
+
+When these environment variables are set, Ralph treats ClickUp updates as required behavior for each story:
+
+- `CLICKUP_TOKEN`
+- `CLICKUP_LIST_ID` or `CLICKUP_LIST_URL`
+
+Optional:
+
+- `CLICKUP_STATUS_IN_PROGRESS` (default `in progress`)
+- `CLICKUP_STATUS_TESTING` (default `testing`)
+- `GITHUB_REPO_URL` (used for commit URL links on tasks)
+
+This keeps your manual QA loop tight: stories move to `testing` only after code changes are committed, tests run, and task activity is updated with what changed plus test outcome.
 
 ## Key Files
 
