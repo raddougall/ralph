@@ -21,6 +21,31 @@ ensure_env_var() {
   fi
 }
 
+write_blank_clickup_env_file() {
+  local file="$1"
+  cat > "$file" <<'CLICKUP_ENV'
+CLICKUP_CLIENT_ID=
+CLICKUP_CLIENT_SECRET=
+CLICKUP_REDIRECT_URI=http://localhost:3333/clickup/callback
+CLICKUP_AUTH_CODE=
+CLICKUP_API_BASE=https://api.clickup.com/api/v2
+CLICKUP_TOKEN=
+CLICKUP_LIST_ID=
+CLICKUP_LIST_URL=
+CLICKUP_STATUS_TODO="to do"
+CLICKUP_STATUS_IN_PROGRESS="in progress"
+CLICKUP_STATUS_TESTING=testing
+CLICKUP_PRUNE_MISSING=0
+CLICKUP_SYNC_APPEND_PROGRESS=1
+CLICKUP_GITHUB_REPO_URL=
+CLICKUP_ATTACH_COMMIT_LINKS=1
+CLICKUP_POST_TESTING_COMMENT=1
+CLICKUP_MOVE_TO_TESTING=1
+CLICKUP_MOVE_TO_IN_PROGRESS=1
+CLICKUP_DRY_RUN=0
+CLICKUP_ENV
+}
+
 cat > "$TARGET_JARVIS_DIR/jarvis.sh" <<'LAUNCHER'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -251,31 +276,11 @@ For traceability:
 CLICKUP_DOC
 
 if [ ! -f "$TARGET_CLICKUP_DIR/.env.clickup.example" ]; then
-  cat > "$TARGET_CLICKUP_DIR/.env.clickup.example" <<'CLICKUP_ENV'
-CLICKUP_CLIENT_ID=
-CLICKUP_CLIENT_SECRET=
-CLICKUP_REDIRECT_URI=http://localhost:3333/clickup/callback
-CLICKUP_AUTH_CODE=
-CLICKUP_API_BASE=https://api.clickup.com/api/v2
-CLICKUP_TOKEN=
-CLICKUP_LIST_ID=
-CLICKUP_LIST_URL=
-CLICKUP_STATUS_TODO=to do
-CLICKUP_STATUS_IN_PROGRESS=in progress
-CLICKUP_STATUS_TESTING=testing
-CLICKUP_PRUNE_MISSING=0
-CLICKUP_SYNC_APPEND_PROGRESS=1
-CLICKUP_GITHUB_REPO_URL=
-CLICKUP_ATTACH_COMMIT_LINKS=1
-CLICKUP_POST_TESTING_COMMENT=1
-CLICKUP_MOVE_TO_TESTING=1
-CLICKUP_MOVE_TO_IN_PROGRESS=1
-CLICKUP_DRY_RUN=0
-CLICKUP_ENV
+  write_blank_clickup_env_file "$TARGET_CLICKUP_DIR/.env.clickup.example"
 fi
 
 if [ ! -f "$TARGET_CLICKUP_DIR/.env.clickup" ]; then
-  cp "$TARGET_CLICKUP_DIR/.env.clickup.example" "$TARGET_CLICKUP_DIR/.env.clickup"
+  write_blank_clickup_env_file "$TARGET_CLICKUP_DIR/.env.clickup"
 fi
 
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_CLIENT_ID" ""
@@ -286,8 +291,8 @@ ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_API_BASE" "ht
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_TOKEN" ""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_LIST_ID" ""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_LIST_URL" ""
-ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_TODO" "to do"
-ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_IN_PROGRESS" "in progress"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_TODO" "\"to do\""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_IN_PROGRESS" "\"in progress\""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_TESTING" "testing"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_PRUNE_MISSING" "0"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_SYNC_APPEND_PROGRESS" "1"
@@ -306,8 +311,8 @@ ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_API_BASE" "https://ap
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_TOKEN" ""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_LIST_ID" ""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_LIST_URL" ""
-ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_TODO" "to do"
-ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_IN_PROGRESS" "in progress"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_TODO" "\"to do\""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_IN_PROGRESS" "\"in progress\""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_TESTING" "testing"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_PRUNE_MISSING" "0"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_SYNC_APPEND_PROGRESS" "1"
