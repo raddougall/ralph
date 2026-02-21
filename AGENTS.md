@@ -47,5 +47,7 @@ npm run dev
 - For Codex runs, detect completion from `--output-last-message` content, not streamed logs, to avoid false `<promise>COMPLETE</promise>` matches.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.
+- Project runs may read shared Jarvis runtime files but must not edit Jarvis itself or other files outside the active project root unless explicitly requested.
+- Localhost test interactions are fine without per-click approval prompts, but any server started for testing must be shut down before the iteration ends.
 - Always update AGENTS.md with discovered patterns for future iterations
 - If ClickUp credentials are configured, every story must use `to do` as the ready queue (`backlog` is ideas only), move status `in progress` -> `testing`, include commit linkage, and include an activity note with implementation + testing outcome.

@@ -153,6 +153,12 @@ Project scoping controls:
 - `JARVIS_PROMPT_FILE` (optional explicit prompt path)
 - If `JARVIS_PROMPT_FILE` is unset and `<project>/.jarvis/prompt.md` exists, Jarvis uses that project-local prompt override. Legacy `.ralph/prompt.md` is still supported.
 
+Safety defaults:
+
+- Host system package-manager mutations stay blocked unless explicitly approved and `JARVIS_ALLOW_SYSTEM_CHANGES=1` is set.
+- Project runs are expected to write only inside the active project root (`JARVIS_PROJECT_DIR`).
+- Localhost smoke testing is allowed, but any temporary local servers must be stopped before the run completes.
+
 Jarvis will:
 1. Create a feature branch (from PRD `branchName`)
 2. Pick the highest priority story where `passes: false`

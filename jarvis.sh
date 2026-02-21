@@ -41,6 +41,9 @@ if [ "$MAX_ITERATIONS" -lt 1 ]; then
   exit 0
 fi
 
+# Ensure runtime is rooted in the target project directory.
+cd "$PROJECT_DIR"
+
 # Guardrail: block host-level package manager mutations unless explicitly allowed.
 if [ -d "$SCRIPT_DIR/guard-bin" ]; then
   export PATH="$SCRIPT_DIR/guard-bin:$PATH"
@@ -58,12 +61,32 @@ if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
     export HOME="$USER_HOME"
   fi
 fi
-if [ -n "${JARVIS_CODEX_HOME:-}" ]; then
-  export CODEX_HOME="$JARVIS_CODEX_HOME"
-elif [ -n "${RALPH_CODEX_HOME:-}" ]; then
-  export CODEX_HOME="$RALPH_CODEX_HOME"
-elif [ -z "$CODEX_HOME" ]; then
-  export CODEX_HOME="$HOME/.codex"
+
+path_in_project() {
+  local target="$1"
+  case "$target" in
+    "$PROJECT_DIR"|"$PROJECT_DIR"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_dir() {
+  local dir="$1"
+  mkdir -p "$dir" 2>/dev/null || true
+  (cd "$dir" 2>/dev/null && pwd) || echo "$dir"
+}
+
+requested_codex_home="${JARVIS_CODEX_HOME:-${RALPH_CODEX_HOME:-${CODEX_HOME:-}}}"
+if [ -n "$requested_codex_home" ]; then
+  resolved_codex_home="$(resolve_dir "$requested_codex_home")"
+  if path_in_project "$resolved_codex_home"; then
+    export CODEX_HOME="$resolved_codex_home"
+  else
+    export CODEX_HOME="$PROJECT_DIR/.codex"
+    echo "Warning: ignoring non-project CODEX_HOME ($resolved_codex_home); using $CODEX_HOME" >&2
+  fi
+else
+  export CODEX_HOME="$PROJECT_DIR/.codex"
 fi
 
 can_write_dir() {
@@ -93,7 +116,12 @@ if [ -n "${JARVIS_CODEX_ADD_DIRS:-${RALPH_CODEX_ADD_DIRS:-}}" ]; then
   OLD_IFS="$IFS"
   IFS=":"
   for dir in ${JARVIS_CODEX_ADD_DIRS:-${RALPH_CODEX_ADD_DIRS:-}}; do
-    CODEX_FLAGS="$CODEX_FLAGS --add-dir $dir"
+    resolved_add_dir="$(resolve_dir "$dir")"
+    if path_in_project "$resolved_add_dir"; then
+      CODEX_FLAGS="$CODEX_FLAGS --add-dir $resolved_add_dir"
+    else
+      echo "Warning: ignoring non-project add-dir ($resolved_add_dir)" >&2
+    fi
   done
   IFS="$OLD_IFS"
 fi

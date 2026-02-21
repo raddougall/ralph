@@ -17,6 +17,12 @@ You are an autonomous coding agent working on a software project.
 11. Append your progress to `progress.txt`
 12. If ClickUp is configured, attach commit URL(s), add an activity comment with summary + tests + outcome, then move task to `testing`
 
+## Project Isolation (Mandatory)
+
+- Treat the project directory (`JARVIS_PROJECT_DIR`) as the only writable workspace during story work.
+- You may read shared Jarvis files (prompts/scripts/skills) for execution context, but do not edit Jarvis itself from a project run.
+- Never modify files outside the active project root unless the user explicitly asks for that exact cross-repo change.
+
 ## ClickUp Workflow (Required When Configured)
 
 If these env vars exist, you MUST keep ClickUp in sync for every story:
@@ -119,6 +125,11 @@ For any story that changes UI, verify it works in the browser if you have browse
 4. Add or update automated UI test coverage for the changed behavior
 
 If no browser tools are available, still deliver automated coverage and note the browser tooling gap.
+
+For local smoke tests:
+- Localhost-only browser actions (for example `http://127.0.0.1` / `http://localhost`) are allowed without pausing for per-click permission prompts.
+- Keep local server testing sandboxed to the project.
+- If you start local servers/processes for testing, you MUST stop them before ending the story iteration (no lingering dev servers).
 
 ## Stop Condition
 
