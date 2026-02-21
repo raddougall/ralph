@@ -81,21 +81,36 @@ resolve_dir() {
   (cd "$dir" 2>/dev/null && pwd) || echo "$dir"
 }
 
-sync_codex_auth() {
+codex_home_can_sync_runtime() {
+  local home_dir="$1"
+  case "$home_dir" in
+    "$PROJECT_DIR"|"$PROJECT_DIR"/*|/tmp/*|"$TMPDIR"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+sync_codex_runtime_files() {
   local source_auth="$HOME/.codex/auth.json"
+  local source_config="$HOME/.codex/config.toml"
   local target_auth="$CODEX_HOME/auth.json"
+  local target_config="$CODEX_HOME/config.toml"
 
-  if ! path_in_project "$CODEX_HOME"; then
-    return 0
-  fi
-
-  if [ ! -f "$source_auth" ]; then
+  if ! codex_home_can_sync_runtime "$CODEX_HOME"; then
     return 0
   fi
 
   mkdir -p "$CODEX_HOME" 2>/dev/null || true
-  if [ ! -f "$target_auth" ] || [ "$source_auth" -nt "$target_auth" ]; then
-    cp "$source_auth" "$target_auth" 2>/dev/null || true
+
+  if [ -f "$source_auth" ]; then
+    if [ ! -f "$target_auth" ] || [ "$source_auth" -nt "$target_auth" ]; then
+      cp "$source_auth" "$target_auth" 2>/dev/null || true
+    fi
+  fi
+
+  if [ -f "$source_config" ]; then
+    if [ ! -f "$target_config" ] || [ "$source_config" -nt "$target_config" ]; then
+      cp "$source_config" "$target_config" 2>/dev/null || true
+    fi
   fi
 }
 
@@ -189,7 +204,7 @@ else
   export CODEX_HOME="$PROJECT_DIR/.codex"
 fi
 
-sync_codex_auth
+sync_codex_runtime_files
 
 can_write_dir() {
   local dir="$1"
@@ -201,8 +216,16 @@ can_write_dir() {
 }
 
 if ! can_write_dir "$CODEX_HOME/sessions"; then
-  FALLBACK_CODEX_HOME="$PROJECT_DIR/.codex"
-  export CODEX_HOME="$FALLBACK_CODEX_HOME"
+  FALLBACK_CODEX_HOME_RAW="${JARVIS_CODEX_FALLBACK_HOME:-${RALPH_CODEX_FALLBACK_HOME:-/tmp/jarvis-codex-$(echo "$PROJECT_DIR" | cksum | awk '{print $1}')}}"
+  FALLBACK_CODEX_HOME_RESOLVED="$(resolve_dir "$FALLBACK_CODEX_HOME_RAW")"
+  case "$FALLBACK_CODEX_HOME_RESOLVED" in
+    /tmp/*|"$TMPDIR"*) ;;
+    *)
+      FALLBACK_CODEX_HOME_RESOLVED="/tmp/jarvis-codex-$(echo "$PROJECT_DIR" | cksum | awk '{print $1}')"
+      ;;
+  esac
+  export CODEX_HOME="$FALLBACK_CODEX_HOME_RESOLVED"
+  sync_codex_runtime_files
   if ! can_write_dir "$CODEX_HOME/sessions"; then
     echo "Warning: CODEX_HOME not writable at $CODEX_HOME (and fallback failed)" >&2
   else
