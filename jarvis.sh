@@ -7,7 +7,8 @@ set -e
 MAX_ITERATIONS=${1:-10}
 AGENT=${JARVIS_AGENT:-${RALPH_AGENT:-amp}}
 AMP_FLAGS=${JARVIS_AMP_FLAGS:-${RALPH_AMP_FLAGS:---dangerously-allow-all}}
-CODEX_FLAGS=${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:---sandbox workspace-write -a never --color never}}
+CODEX_GLOBAL_FLAGS=${JARVIS_CODEX_GLOBAL_FLAGS:-${RALPH_CODEX_GLOBAL_FLAGS:---sandbox workspace-write -a never}}
+CODEX_FLAGS=${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:---color never}}
 CODEX_BIN=${JARVIS_CODEX_BIN:-${RALPH_CODEX_BIN:-codex}}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
@@ -304,9 +305,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   if [ "$AGENT" = "codex" ]; then
     LAST_MESSAGE_FILE=$(mktemp "${PROJECT_DIR}/.codex-last-message.XXXXXX")
     if [ -n "$FOLLOW_LOG" ]; then
-      cat "$PROMPT_FILE" | "$CODEX_BIN" exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
+      cat "$PROMPT_FILE" | "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
     else
-      cat "$PROMPT_FILE" | "$CODEX_BIN" exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
+      cat "$PROMPT_FILE" | "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
     fi
     OUTPUT=$(cat "$LAST_MESSAGE_FILE" 2>/dev/null || true)
     rm -f "$LAST_MESSAGE_FILE" 2>/dev/null || true

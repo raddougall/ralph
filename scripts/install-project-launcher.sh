@@ -118,7 +118,8 @@ OPENAI_API_KEY=
 
 # Optional runtime defaults
 # JARVIS_AGENT=codex
-# JARVIS_CODEX_FLAGS="--sandbox workspace-write -a never --color never"
+# JARVIS_CODEX_GLOBAL_FLAGS="--sandbox workspace-write -a never"
+# JARVIS_CODEX_FLAGS="--color never"
 # JARVIS_CODEX_ENABLE_NETWORK=1
 # JARVIS_CLICKUP_SYNC_ON_START=1
 # JARVIS_CLICKUP_SYNC_STRICT=0

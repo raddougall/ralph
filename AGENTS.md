@@ -44,7 +44,7 @@ npm run dev
 - Each iteration spawns a fresh agent instance with clean context
 - Memory persists via git history, `progress.txt`, and `prd.json`
 - Stories should be small enough to complete in one context window
-- Codex unattended default is `--sandbox workspace-write -a never --color never`; this avoids interactive approval pauses during long runs.
+- Codex unattended default is top-level `--sandbox workspace-write -a never` plus exec flags `--color never`; this avoids interactive approval pauses during long runs.
 - For Codex runs, detect completion from `--output-last-message` content, not streamed logs, to avoid false `<promise>COMPLETE</promise>` matches.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.

@@ -162,9 +162,15 @@ OPENAI_API_KEY=...
 
 The project launcher `scripts/jarvis/jarvis.sh` auto-loads this local file before invoking the shared Jarvis runtime.
 
-To customize Codex flags, set `JARVIS_CODEX_FLAGS` (default: `--sandbox workspace-write -a never --color never`):
+To customize Codex flags, set:
+- `JARVIS_CODEX_GLOBAL_FLAGS` (default: `--sandbox workspace-write -a never`)
+- `JARVIS_CODEX_FLAGS` (default: `--color never`)
+
+Example:
 ```bash
-JARVIS_CODEX_FLAGS="--sandbox workspace-write -a never --color never -m o3" JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh
+JARVIS_CODEX_GLOBAL_FLAGS="--sandbox workspace-write -a never" \
+JARVIS_CODEX_FLAGS="--color never -m o3" \
+JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh
 ```
 
 Project scoping controls:
