@@ -76,6 +76,50 @@ resolve_dir() {
   (cd "$dir" 2>/dev/null && pwd) || echo "$dir"
 }
 
+has_clickup_config() {
+  if [ -z "${CLICKUP_TOKEN:-}" ]; then
+    return 1
+  fi
+  if [ -z "${CLICKUP_LIST_ID:-${CLICKUP_LIST_URL:-}}" ]; then
+    return 1
+  fi
+  return 0
+}
+
+run_clickup_prd_pull_sync() {
+  local should_sync="${JARVIS_CLICKUP_SYNC_ON_START:-${RALPH_CLICKUP_SYNC_ON_START:-1}}"
+  local strict_sync="${JARVIS_CLICKUP_SYNC_STRICT:-${RALPH_CLICKUP_SYNC_STRICT:-0}}"
+  local sync_script="$PROJECT_DIR/scripts/clickup/sync_clickup_to_prd.sh"
+
+  if [ "$should_sync" = "0" ]; then
+    return 0
+  fi
+
+  if ! has_clickup_config; then
+    echo "ClickUp pre-sync skipped: set CLICKUP_TOKEN and CLICKUP_LIST_ID/CLICKUP_LIST_URL to enable."
+    return 0
+  fi
+
+  if [ ! -x "$sync_script" ]; then
+    echo "ClickUp pre-sync skipped: script not found or not executable at $sync_script"
+    return 0
+  fi
+
+  echo "Running ClickUp -> local PRD sync..."
+  if PRD_FILE="$PRD_FILE" PROGRESS_FILE="$PROGRESS_FILE" "$sync_script"; then
+    echo "ClickUp pre-sync complete."
+    return 0
+  fi
+
+  if [ "$strict_sync" = "1" ]; then
+    echo "ClickUp pre-sync failed and strict mode is enabled (JARVIS_CLICKUP_SYNC_STRICT=1)." >&2
+    exit 1
+  fi
+
+  echo "Warning: ClickUp pre-sync failed; continuing run (set JARVIS_CLICKUP_SYNC_STRICT=1 to fail-fast)." >&2
+  return 0
+}
+
 requested_codex_home="${JARVIS_CODEX_HOME:-${RALPH_CODEX_HOME:-${CODEX_HOME:-}}}"
 if [ -n "$requested_codex_home" ]; then
   resolved_codex_home="$(resolve_dir "$requested_codex_home")"
@@ -192,6 +236,8 @@ if [ -n "${JARVIS_DEBUG_ENV:-${RALPH_DEBUG_ENV:-}}" ]; then
     echo "==============================="
   } >> "$LOG_FILE" 2>&1
 fi
+
+run_clickup_prd_pull_sync
 
 # Archive previous run if branch changed
 if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then

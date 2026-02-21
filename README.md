@@ -142,6 +142,24 @@ RALPH_AGENT=codex ./scripts/ralph/ralph.sh [max_iterations]
 
 Default is 10 iterations.
 
+## API Key And Secrets (Local Only)
+
+Do not paste API keys in chat or commit them to git.
+
+Recommended setup in each project:
+
+```bash
+cp scripts/jarvis/.env.jarvis.example scripts/jarvis/.env.jarvis.local
+```
+
+Then set your key in `scripts/jarvis/.env.jarvis.local`:
+
+```bash
+OPENAI_API_KEY=...
+```
+
+The project launcher `scripts/jarvis/jarvis.sh` auto-loads this local file before invoking the shared Jarvis runtime.
+
 To customize Codex flags, set `JARVIS_CODEX_FLAGS` (default: `--full-auto --color never`):
 ```bash
 JARVIS_CODEX_FLAGS="--full-auto -m o3" JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh
@@ -183,9 +201,11 @@ Optional:
 - `CLICKUP_STATUS_TODO` (default `to do`)
 - `CLICKUP_STATUS_IN_PROGRESS` (default `in progress`)
 - `CLICKUP_STATUS_TESTING` (default `testing`)
+- `JARVIS_CLICKUP_SYNC_ON_START` (default `1`: run `scripts/clickup/sync_clickup_to_prd.sh` before iterations)
+- `JARVIS_CLICKUP_SYNC_STRICT` (default `0`: set `1` to fail fast if pre-sync fails)
 - `GITHUB_REPO_URL` (used for commit URL links on tasks)
 
-This keeps your manual QA loop tight: `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
+This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
 
 ## Key Files
 

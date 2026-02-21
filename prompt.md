@@ -40,6 +40,7 @@ Optional env vars:
 - `CLICKUP_STATUS_IN_PROGRESS` (default: `in progress`)
 - `CLICKUP_STATUS_TESTING` (default: `testing`)
 - `GITHUB_REPO_URL` (for commit links; if missing, derive from `git remote origin`)
+- `JARVIS_CLICKUP_SYNC_ON_START` (default: `1`, pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` when `scripts/clickup/sync_clickup_to_prd.sh` is available)
 
 Required behavior per story:
 

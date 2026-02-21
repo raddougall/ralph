@@ -51,4 +51,5 @@ npm run dev
 - Localhost test interactions are fine without per-click approval prompts, but any server started for testing must be shut down before the iteration ends.
 - Every project must maximize automated testing for changed behavior and keep CI-ready, non-interactive test scripts/commands up to date.
 - Always update AGENTS.md with discovered patterns for future iterations
+- If ClickUp credentials are configured and `scripts/clickup/sync_clickup_to_prd.sh` exists, Jarvis pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` at run start (default enabled).
 - If ClickUp credentials are configured, every story must use `to do` as the ready queue (`backlog` is ideas only), move status `in progress` -> `testing`, include commit linkage, and include an activity note with implementation details, test commands/outcomes, and test file paths; link related tasks for traceability, and use ClickUp task type `bug` for bug work linked back to the originating story.

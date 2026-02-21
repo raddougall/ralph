@@ -14,6 +14,14 @@ cat > "$TARGET_JARVIS_DIR/jarvis.sh" <<'LAUNCHER'
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOCAL_ENV_FILE="$PROJECT_ROOT/scripts/jarvis/.env.jarvis.local"
+if [ -f "$LOCAL_ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$LOCAL_ENV_FILE"
+  set +a
+fi
+
 JARVIS_HOME="${JARVIS_HOME:-${RALPH_HOME:-}}"
 if [ -z "$JARVIS_HOME" ]; then
   if [ -d "$HOME/CodeDev/Jarvis" ]; then
@@ -62,6 +70,17 @@ The launcher pins execution to this repo by exporting:
 
 That means all working files (`prd.json`, `progress.txt`, `archive/`, logs, branch tracking) stay inside this project directory.
 
+## Local secrets (recommended)
+
+Create `scripts/jarvis/.env.jarvis.local` for local-only secrets and runtime flags (for example `OPENAI_API_KEY`).
+The launcher auto-loads this file before running Jarvis.
+
+Example:
+
+```bash
+cp scripts/jarvis/.env.jarvis.example scripts/jarvis/.env.jarvis.local
+```
+
 ## Usage
 
 ```bash
@@ -79,6 +98,19 @@ RALPH_AGENT=codex ./scripts/ralph/ralph.sh
 If you need project-specific prompt customization without forking the full runtime,
 create `.jarvis/prompt.md` in this project (legacy `.ralph/prompt.md` also supported).
 DOC
+
+if [ ! -f "$TARGET_JARVIS_DIR/.env.jarvis.example" ]; then
+  cat > "$TARGET_JARVIS_DIR/.env.jarvis.example" <<'JARVIS_ENV'
+# Local-only Jarvis/Codex secrets (do not commit actual values)
+OPENAI_API_KEY=
+
+# Optional runtime defaults
+# JARVIS_AGENT=codex
+# JARVIS_CODEX_ENABLE_NETWORK=1
+# JARVIS_CLICKUP_SYNC_ON_START=1
+# JARVIS_CLICKUP_SYNC_STRICT=0
+JARVIS_ENV
+fi
 
 cat > "$TARGET_CLICKUP_DIR/get_oauth_token.sh" <<'CLICKUP_OAUTH'
 #!/usr/bin/env bash
@@ -132,12 +164,39 @@ exec "$MASTER_SCRIPT" "$@"
 CLICKUP_SYNC
 chmod +x "$TARGET_CLICKUP_DIR/sync_prd_to_clickup.sh"
 
+cat > "$TARGET_CLICKUP_DIR/sync_clickup_to_prd.sh" <<'CLICKUP_PULL'
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+JARVIS_HOME="${JARVIS_HOME:-${RALPH_HOME:-}}"
+if [ -z "$JARVIS_HOME" ]; then
+  if [ -d "$HOME/CodeDev/Jarvis" ]; then
+    JARVIS_HOME="$HOME/CodeDev/Jarvis"
+  else
+    JARVIS_HOME="$HOME/CodeDev/Ralph"
+  fi
+fi
+MASTER_SCRIPT="$JARVIS_HOME/scripts/clickup/sync_clickup_to_prd.sh"
+
+if [ ! -x "$MASTER_SCRIPT" ]; then
+  echo "Master ClickUp script not found or not executable: $MASTER_SCRIPT" >&2
+  echo "Set JARVIS_HOME (or legacy RALPH_HOME) to your Jarvis repo path." >&2
+  exit 1
+fi
+
+cd "$PROJECT_ROOT"
+exec "$MASTER_SCRIPT" "$@"
+CLICKUP_PULL
+chmod +x "$TARGET_CLICKUP_DIR/sync_clickup_to_prd.sh"
+
 cat > "$TARGET_CLICKUP_DIR/README.md" <<'CLICKUP_DOC'
 # ClickUp Scripts (Project-Local Wrappers)
 
 This project uses shared ClickUp scripts from Jarvis.
 
 - `scripts/clickup/get_oauth_token.sh`
+- `scripts/clickup/sync_clickup_to_prd.sh`
 - `scripts/clickup/sync_prd_to_clickup.sh`
 
 These local wrappers execute the master scripts while keeping defaults project-local
@@ -187,6 +246,8 @@ CLICKUP_LIST_URL=
 CLICKUP_STATUS_TODO=to do
 CLICKUP_STATUS_IN_PROGRESS=in progress
 CLICKUP_STATUS_TESTING=testing
+CLICKUP_PRUNE_MISSING=0
+CLICKUP_SYNC_APPEND_PROGRESS=1
 CLICKUP_GITHUB_REPO_URL=
 CLICKUP_ATTACH_COMMIT_LINKS=1
 CLICKUP_POST_TESTING_COMMENT=1
@@ -195,6 +256,20 @@ CLICKUP_MOVE_TO_IN_PROGRESS=1
 CLICKUP_DRY_RUN=0
 CLICKUP_ENV
 fi
+
+ensure_gitignore_entry() {
+  local entry="$1"
+  local file="$TARGET_DIR/.gitignore"
+  if [ ! -f "$file" ]; then
+    touch "$file"
+  fi
+  if ! grep -Fxq "$entry" "$file"; then
+    printf '\n%s\n' "$entry" >> "$file"
+  fi
+}
+
+ensure_gitignore_entry "scripts/jarvis/.env.jarvis.local"
+ensure_gitignore_entry "scripts/clickup/.env.clickup"
 
 echo "Installed Jarvis launcher at: $TARGET_JARVIS_DIR"
 echo "Installed Ralph compatibility launcher at: $TARGET_RALPH_DIR"
