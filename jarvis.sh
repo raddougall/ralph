@@ -143,6 +143,39 @@ run_clickup_prd_pull_sync() {
   return 0
 }
 
+run_project_launcher_sync() {
+  local should_sync="${JARVIS_PROJECT_SYNC_ON_START:-${RALPH_PROJECT_SYNC_ON_START:-1}}"
+  local strict_sync="${JARVIS_PROJECT_SYNC_STRICT:-${RALPH_PROJECT_SYNC_STRICT:-0}}"
+  local installer_script="$SCRIPT_DIR/scripts/install-project-launcher.sh"
+
+  if [ "$should_sync" = "0" ]; then
+    return 0
+  fi
+
+  if [ "$PROJECT_DIR" = "$SCRIPT_DIR" ]; then
+    return 0
+  fi
+
+  if [ ! -x "$installer_script" ]; then
+    echo "Project launcher sync skipped: installer not found or not executable at $installer_script"
+    return 0
+  fi
+
+  echo "Syncing project launcher/wrappers from Jarvis master..."
+  if "$installer_script" "$PROJECT_DIR" >/dev/null 2>&1; then
+    echo "Project launcher sync complete."
+    return 0
+  fi
+
+  if [ "$strict_sync" = "1" ]; then
+    echo "Project launcher sync failed and strict mode is enabled (JARVIS_PROJECT_SYNC_STRICT=1)." >&2
+    exit 1
+  fi
+
+  echo "Warning: project launcher sync failed; continuing run (set JARVIS_PROJECT_SYNC_STRICT=1 to fail-fast)." >&2
+  return 0
+}
+
 requested_codex_home="${JARVIS_CODEX_HOME:-${RALPH_CODEX_HOME:-${CODEX_HOME:-}}}"
 if [ -n "$requested_codex_home" ]; then
   resolved_codex_home="$(resolve_dir "$requested_codex_home")"
@@ -262,6 +295,7 @@ if [ -n "${JARVIS_DEBUG_ENV:-${RALPH_DEBUG_ENV:-}}" ]; then
   } >> "$LOG_FILE" 2>&1
 fi
 
+run_project_launcher_sync
 run_clickup_prd_pull_sync
 
 # Archive previous run if branch changed

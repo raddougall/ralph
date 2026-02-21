@@ -41,6 +41,12 @@ Optional env vars:
 - `JARVIS_CLICKUP_SYNC_ON_START` (default: `1`, pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` when `scripts/clickup/sync_clickup_to_prd.sh` is available)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default: `0`, set `1` to fail the run if pre-sync fails)
 - `JARVIS_APPROVAL_QUEUE_FILE` (default: `./approval-queue.txt`)
+- `JARVIS_PROJECT_SYNC_ON_START` (default: `1`, refresh project-local wrappers/docs/templates from Jarvis master before story work)
+- `JARVIS_PROJECT_SYNC_STRICT` (default: `0`, set `1` to fail the run if project sync fails)
+
+Project sync must be additive and safe:
+- never overwrite existing project secret values (for example `.env` files)
+- only add missing defaults and refresh shared wrappers/docs
 
 Required behavior per story:
 

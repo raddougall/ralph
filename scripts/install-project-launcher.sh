@@ -83,6 +83,31 @@ exec "$MASTER_JARVIS" "$@"
 LAUNCHER
 chmod +x "$TARGET_JARVIS_DIR/jarvis.sh"
 
+cat > "$TARGET_JARVIS_DIR/sync-with-master.sh" <<'SYNC_WITH_MASTER'
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+JARVIS_HOME="${JARVIS_HOME:-${RALPH_HOME:-}}"
+if [ -z "$JARVIS_HOME" ]; then
+  if [ -d "$HOME/CodeDev/Jarvis" ]; then
+    JARVIS_HOME="$HOME/CodeDev/Jarvis"
+  else
+    JARVIS_HOME="$HOME/CodeDev/Ralph"
+  fi
+fi
+
+MASTER_INSTALLER="$JARVIS_HOME/scripts/install-project-launcher.sh"
+if [ ! -x "$MASTER_INSTALLER" ]; then
+  echo "Master Jarvis installer not found or not executable: $MASTER_INSTALLER" >&2
+  echo "Set JARVIS_HOME (or legacy RALPH_HOME) to your Jarvis repo path." >&2
+  exit 1
+fi
+
+exec "$MASTER_INSTALLER" "$PROJECT_ROOT"
+SYNC_WITH_MASTER
+chmod +x "$TARGET_JARVIS_DIR/sync-with-master.sh"
+
 cat > "$TARGET_RALPH_DIR/ralph.sh" <<'RALPH_SHIM'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -99,6 +124,7 @@ This project uses the shared master Jarvis runtime.
 
 - Primary launcher: `scripts/jarvis/jarvis.sh`
 - Legacy compatibility launcher: `scripts/ralph/ralph.sh`
+- Manual sync helper: `scripts/jarvis/sync-with-master.sh`
 - Default shared runtime path: `$HOME/CodeDev/Jarvis` (fallback `$HOME/CodeDev/Ralph`)
 - Override path with: `JARVIS_HOME=/path/to/Jarvis` (legacy `RALPH_HOME` still supported)
 
@@ -107,6 +133,9 @@ The launcher pins execution to this repo by exporting:
 - `JARVIS_PROJECT_DIR=<this repo root>`
 
 That means all working files (`prd.json`, `progress.txt`, `archive/`, logs, branch tracking) stay inside this project directory.
+
+Before each run, master Jarvis auto-syncs project-local wrappers/docs/templates from Jarvis defaults.
+This sync is additive and does not overwrite existing secret values in local env files.
 
 ## Local secrets (recommended)
 
@@ -149,6 +178,8 @@ OPENAI_API_KEY=
 # JARVIS_CODEX_ENABLE_NETWORK=1
 # JARVIS_CLICKUP_SYNC_ON_START=1
 # JARVIS_CLICKUP_SYNC_STRICT=0
+# JARVIS_PROJECT_SYNC_ON_START=1
+# JARVIS_PROJECT_SYNC_STRICT=0
 JARVIS_ENV
 fi
 
@@ -344,5 +375,6 @@ ensure_gitignore_entry "scripts/jarvis/.env.jarvis.local"
 ensure_gitignore_entry "scripts/clickup/.env.clickup"
 
 echo "Installed Jarvis launcher at: $TARGET_JARVIS_DIR"
+echo "Installed Jarvis sync helper at: $TARGET_JARVIS_DIR/sync-with-master.sh"
 echo "Installed Ralph compatibility launcher at: $TARGET_RALPH_DIR"
 echo "Installed ClickUp wrappers at: $TARGET_CLICKUP_DIR"
