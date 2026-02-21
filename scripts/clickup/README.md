@@ -80,6 +80,22 @@ Recommended list convention:
 - `backlog` = future ideas only
 - `to do` = planned/approved tasks ready for execution
 
+## Task Update Conventions (Jarvis Runs)
+
+For each completed story, add a task activity comment that includes:
+
+- what changed
+- test commands run and pass/fail outcomes
+- repo-relative paths of automated test files added/updated
+- manual smoke-test outcome (or explicitly `none`)
+- final outcome / ready-for-testing note
+
+For traceability:
+
+- attach commit links to the story task
+- link related tasks (for example bug task linked to originating story task)
+- use ClickUp task type `bug` for bug reports/fixes, not generic story/task type
+
 ## Dry-run
 
 ```bash

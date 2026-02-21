@@ -158,6 +158,22 @@ set -a
 source scripts/clickup/.env.clickup
 set +a
 ```
+
+## Task Update Conventions (Jarvis Runs)
+
+For each completed story, add a task activity comment that includes:
+
+- what changed
+- test commands run and pass/fail outcomes
+- repo-relative paths of automated test files added/updated
+- manual smoke-test outcome (or explicitly `none`)
+- final outcome / ready-for-testing note
+
+For traceability:
+
+- attach commit links to the story task
+- link related tasks (for example bug task linked to originating story task)
+- use ClickUp task type `bug` for bug reports/fixes, not generic story/task type
 CLICKUP_DOC
 
 if [ ! -f "$TARGET_CLICKUP_DIR/.env.clickup.example" ]; then

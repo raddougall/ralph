@@ -167,7 +167,7 @@ Jarvis will:
 5. Run the automated quality suite via CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
 6. Commit if checks pass
 7. Update `prd.json` to mark story as `passes: true`
-8. If ClickUp is configured, attach commit link(s), add task activity notes (changes + tests + outcome), and move task to `testing`
+8. If ClickUp is configured, attach commit link(s), add structured task activity notes (changes + test commands/outcomes + test file paths + smoke result), link related tasks (including bug/story links), and move the story task to `testing`
 9. Append learnings to `progress.txt`
 10. Repeat until all stories pass or max iterations reached
 
@@ -185,7 +185,7 @@ Optional:
 - `CLICKUP_STATUS_TESTING` (default `testing`)
 - `GITHUB_REPO_URL` (used for commit URL links on tasks)
 
-This keeps your manual QA loop tight: `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with what changed plus test outcome.
+This keeps your manual QA loop tight: `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
 
 ## Key Files
 

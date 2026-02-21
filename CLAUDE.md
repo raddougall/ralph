@@ -15,7 +15,7 @@ You are an autonomous coding agent working on a software project.
 9. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]` (append ` | ClickUp: <task_id>` when task id is known)
 10. Update the PRD to set `passes: true` for the completed story
 11. Append your progress to `progress.txt`
-12. If ClickUp is configured, attach commit URL(s), add an activity comment with summary + tests + outcome, then move task to `testing`
+12. If ClickUp is configured, attach commit URL(s), add a structured activity comment (changes + tests run + test file paths + outcome), create/link bug tasks when relevant, then move the story task to `testing`
 
 ## Project Isolation (Mandatory)
 
@@ -46,9 +46,20 @@ Required behavior per story:
 4. After commit, add GitHub commit URL to the task (description section like `GitHub Commits:` or comment).
 5. Add an activity comment with:
    - what you changed
-   - what tests you ran
+   - what tests you ran (commands + pass/fail outcome)
+   - where the automated test files are (repo-relative file paths for added/updated coverage)
+   - any manual smoke checks performed (or explicitly state none)
    - outcome/result
-6. Move task to `testing` when it is ready for manual validation.
+6. Link related tasks when work has dependency/traceability context (for example, bug <-> originating user story).
+7. Bugs must use ClickUp task type `bug` (not story/task type), include repro details, and link back to the related `[US-xxx]` story task.
+8. Move the story task to `testing` when it is ready for manual validation.
+
+Use this activity comment template:
+- `Changed:` concise implementation summary
+- `Tests Run:` command list + pass/fail
+- `Test Files:` repo-relative paths (for example `tests/Feature/BookingsTest.php`)
+- `Smoke Check:` manual check result or `none`
+- `Outcome:` ready for testing / blocked (+ reason)
 
 If ClickUp config is missing, continue normal implementation and explicitly report ClickUp was skipped due to missing configuration.
 
