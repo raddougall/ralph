@@ -45,6 +45,7 @@ npm run dev
 - Memory persists via git history, `progress.txt`, and `prd.json`
 - Stories should be small enough to complete in one context window
 - Codex unattended default is top-level `--sandbox workspace-write -a never` plus exec flags `--color never`; this avoids interactive approval pauses during long runs.
+- When Jarvis uses project-local `CODEX_HOME`, it mirrors `~/.codex/auth.json` into the project home so Codex remains authenticated without using global session storage.
 - For Codex runs, detect completion from `--output-last-message` content, not streamed logs, to avoid false `<promise>COMPLETE</promise>` matches.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.

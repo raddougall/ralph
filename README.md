@@ -162,6 +162,8 @@ OPENAI_API_KEY=...
 
 The project launcher `scripts/jarvis/jarvis.sh` auto-loads this local file before invoking the shared Jarvis runtime.
 
+Jarvis also syncs `~/.codex/auth.json` into project-local `CODEX_HOME` (`<project>/.codex/auth.json`) so authenticated Codex runs still work with project-scoped session storage.
+
 To customize Codex flags, set:
 - `JARVIS_CODEX_GLOBAL_FLAGS` (default: `--sandbox workspace-write -a never`)
 - `JARVIS_CODEX_FLAGS` (default: `--color never`)

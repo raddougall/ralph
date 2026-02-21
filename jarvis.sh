@@ -81,6 +81,24 @@ resolve_dir() {
   (cd "$dir" 2>/dev/null && pwd) || echo "$dir"
 }
 
+sync_codex_auth() {
+  local source_auth="$HOME/.codex/auth.json"
+  local target_auth="$CODEX_HOME/auth.json"
+
+  if ! path_in_project "$CODEX_HOME"; then
+    return 0
+  fi
+
+  if [ ! -f "$source_auth" ]; then
+    return 0
+  fi
+
+  mkdir -p "$CODEX_HOME" 2>/dev/null || true
+  if [ ! -f "$target_auth" ] || [ "$source_auth" -nt "$target_auth" ]; then
+    cp "$source_auth" "$target_auth" 2>/dev/null || true
+  fi
+}
+
 has_clickup_config() {
   if [ -z "${CLICKUP_TOKEN:-}" ]; then
     return 1
@@ -137,6 +155,8 @@ if [ -n "$requested_codex_home" ]; then
 else
   export CODEX_HOME="$PROJECT_DIR/.codex"
 fi
+
+sync_codex_auth
 
 can_write_dir() {
   local dir="$1"
