@@ -1,0 +1,21 @@
+{
+  "name": "jarvis-marketplace",
+  "owner": {
+    "name": "raddougall"
+  },
+  "metadata": {
+    "description": "Skills for the Jarvis autonomous agent system - Generate PRDs and convert them to prd.json for autonomous execution",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "jarvis-skills",
+      "source": "./",
+      "description": "PRD generation and conversion skills for the Jarvis autonomous agent loop",
+      "version": "1.0.0",
+      "keywords": ["jarvis", "ralph", "prd", "automation", "agent", "planning"],
+      "category": "productivity",
+      "skills": "./skills/"
+    }
+  ]
+}

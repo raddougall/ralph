@@ -1,6 +1,7 @@
 ---
 name: ralph
 description: "Convert PRDs to prd.json format for the Jarvis (legacy Ralph) autonomous agent system. Use when you have an existing PRD and need to convert it to Jarvis JSON format. Triggers on: convert this prd, turn this into ralph format, create prd.json from this, ralph json, jarvis json."
+user-invocable: true
 ---
 
 # Jarvis PRD Converter (Legacy Skill Name: ralph)

@@ -71,6 +71,24 @@ Symlink this repo’s skills into Codex:
 
 Then restart Codex to pick up the new skills. Re-run the script any time you add or rename skills in this repo.
 
+### Option 5: Use as Claude Code Marketplace
+
+Add the Jarvis marketplace to Claude Code:
+
+```bash
+/plugin marketplace add raddougall/jarvis
+```
+
+Then install the skills:
+
+```bash
+/plugin install jarvis-skills@jarvis-marketplace
+```
+
+Available skills after installation:
+- `/prd` - Generate Product Requirements Documents
+- `/ralph` - Convert PRDs to prd.json format (legacy skill name)
+
 ### Configure Amp auto-handoff (recommended, Amp only)
 
 Add to `~/.config/amp/settings.json`:
@@ -174,6 +192,7 @@ This keeps your manual QA loop tight: `to do` is the active ready queue, `backlo
 | `progress.txt` | Append-only learnings for future iterations |
 | `skills/prd/` | Skill for generating PRDs |
 | `skills/ralph/` | Legacy skill name for converting PRDs to JSON |
+| `.claude-plugin/` | Plugin manifests for Claude Code marketplace discovery |
 | `flowchart/` | Interactive visualization of how Jarvis works |
 | `scripts/clickup/` | Shared ClickUp OAuth + PRD sync scripts used by project wrappers |
 
