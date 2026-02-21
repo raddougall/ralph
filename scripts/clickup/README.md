@@ -106,7 +106,9 @@ Recommended list convention:
 
 ## Task Update Conventions (Jarvis Runs)
 
-For each completed story, add a task activity comment that includes:
+For each story, post task activity comments during execution (`start`, `progress`, `testing`), prefixed with a `Jarvis/Codex` label. Jarvis/Codex should post these directly (do not ask the user to copy/paste updates).
+
+Completion comment must include:
 
 - what changed
 - test commands run and pass/fail outcomes
@@ -119,6 +121,7 @@ For traceability:
 - attach commit links to the story task
 - link related tasks (for example bug task linked to originating story task)
 - use ClickUp task type `bug` for bug reports/fixes, not generic story/task type
+- keep final ClickUp completion note aligned with the same implementation/test summary shared in terminal output
 
 ## Dry-run
 

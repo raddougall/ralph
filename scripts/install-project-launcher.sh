@@ -35,6 +35,7 @@ CLICKUP_LIST_URL=
 CLICKUP_STATUS_TODO="to do"
 CLICKUP_STATUS_IN_PROGRESS="in progress"
 CLICKUP_STATUS_TESTING=testing
+CLICKUP_COMMENT_AUTHOR_LABEL=Jarvis/Codex
 CLICKUP_PRUNE_MISSING=0
 CLICKUP_SYNC_APPEND_PROGRESS=1
 CLICKUP_GITHUB_REPO_URL=
@@ -260,7 +261,9 @@ set +a
 
 ## Task Update Conventions (Jarvis Runs)
 
-For each completed story, add a task activity comment that includes:
+For each story, post task activity comments during execution (`start`, `progress`, `testing`), prefixed with a `Jarvis/Codex` label. Jarvis/Codex should post these directly (do not ask the user to copy/paste updates).
+
+Completion comment must include:
 
 - what changed
 - test commands run and pass/fail outcomes
@@ -273,6 +276,7 @@ For traceability:
 - attach commit links to the story task
 - link related tasks (for example bug task linked to originating story task)
 - use ClickUp task type `bug` for bug reports/fixes, not generic story/task type
+- keep final ClickUp completion note aligned with the same implementation/test summary shared in terminal output
 CLICKUP_DOC
 
 if [ ! -f "$TARGET_CLICKUP_DIR/.env.clickup.example" ]; then
@@ -294,6 +298,7 @@ ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_LIST_URL" ""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_TODO" "\"to do\""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_IN_PROGRESS" "\"in progress\""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_STATUS_TESTING" "testing"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_COMMENT_AUTHOR_LABEL" "Jarvis/Codex"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_PRUNE_MISSING" "0"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_SYNC_APPEND_PROGRESS" "1"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_GITHUB_REPO_URL" ""
@@ -314,6 +319,7 @@ ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_LIST_URL" ""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_TODO" "\"to do\""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_IN_PROGRESS" "\"in progress\""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_STATUS_TESTING" "testing"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_COMMENT_AUTHOR_LABEL" "Jarvis/Codex"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_PRUNE_MISSING" "0"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_SYNC_APPEND_PROGRESS" "1"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_GITHUB_REPO_URL" ""

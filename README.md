@@ -190,12 +190,12 @@ Safety defaults:
 Jarvis will:
 1. Create a feature branch (from PRD `branchName`)
 2. Pick the highest priority unblocked story where `passes: false` and `notes` does not start with `BLOCKED:`
-3. If ClickUp is configured, move the matching `[US-xxx]` task from `to do` to `in progress`
+3. If ClickUp is configured, move the matching `[US-xxx]` task from `to do` to `in progress` and post a kickoff plan comment
 4. Implement that single story
 5. Run the automated quality suite via CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
 6. Commit if checks pass
 7. Update `prd.json` to mark story as `passes: true`
-8. If ClickUp is configured, attach commit link(s), add structured task activity notes (changes + test commands/outcomes + test file paths + smoke result), link related tasks (including bug/story links), and move the story task to `testing`
+8. If ClickUp is configured, post live task comments (`start`, `progress`, `testing`) with a `Jarvis/Codex` label, attach commit link(s), add structured task activity notes (changes + test commands/outcomes + test file paths + smoke result), link related tasks (including bug/story links), and move the story task to `testing`
 9. Append learnings to `progress.txt`
 10. Repeat until all stories pass or max iterations reached
 
@@ -222,12 +222,13 @@ Optional:
 - `CLICKUP_STATUS_TODO` (default `to do`)
 - `CLICKUP_STATUS_IN_PROGRESS` (default `in progress`)
 - `CLICKUP_STATUS_TESTING` (default `testing`)
+- `CLICKUP_COMMENT_AUTHOR_LABEL` (default `Jarvis/Codex`)
 - `JARVIS_CLICKUP_SYNC_ON_START` (default `1`: run `scripts/clickup/sync_clickup_to_prd.sh` before iterations)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default `0`: set `1` to fail fast if pre-sync fails)
 - `JARVIS_APPROVAL_QUEUE_FILE` (default `./approval-queue.txt`)
 - `GITHUB_REPO_URL` (used for commit URL links on tasks)
 
-This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
+This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
 
 ## Key Files
 

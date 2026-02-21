@@ -11,14 +11,14 @@ Before starting, check whether a relevant skill exists under `skills/` in this r
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
 4. Pick the **highest priority** user story where `passes: false` and `notes` does not start with `BLOCKED:`
-5. If ClickUp is configured (see below), find the matching task for the story and move it from `to do` to `in progress`
-6. Implement that single user story
+5. If ClickUp is configured (see below), find the matching task for the story, move it from `to do` to `in progress`, and post a kickoff activity comment with the implementation plan
+6. Implement that single user story and post ClickUp progress comments at major milestones (plan complete, code complete, tests complete)
 7. Run the full automated quality suite for the changed scope using CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
 8. Update AGENTS.md files if you discover reusable patterns (see below)
 9. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]` (append ` | ClickUp: <task_id>` when task id is known)
 10. Update the PRD to set `passes: true` for the completed story
 11. Append your progress to `progress.txt`
-12. If ClickUp is configured, attach commit URL(s), add a structured activity comment (changes + tests run + test file paths + outcome), create/link bug tasks when relevant, then move the story task to `testing`
+12. If ClickUp is configured, attach commit URL(s), add a final structured activity comment that matches your terminal summary, create/link bug tasks when relevant, then move the story task to `testing`
 
 ## Project Isolation (Mandatory)
 
@@ -39,6 +39,7 @@ Optional env vars:
 - `CLICKUP_STATUS_TODO` (default: `to do`)
 - `CLICKUP_STATUS_IN_PROGRESS` (default: `in progress`)
 - `CLICKUP_STATUS_TESTING` (default: `testing`)
+- `CLICKUP_COMMENT_AUTHOR_LABEL` (default: `Jarvis/Codex`; prepended to every task comment so updates are visibly automated)
 - `GITHUB_REPO_URL` (for commit links; if missing, derive from `git remote origin`)
 - `JARVIS_CLICKUP_SYNC_ON_START` (default: `1`, pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` when `scripts/clickup/sync_clickup_to_prd.sh` is available)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default: `0`, set `1` to fail the run if pre-sync fails)
@@ -49,23 +50,25 @@ Required behavior per story:
 1. Resolve story task in the target list by name prefix `[US-xxx]`.
 2. Treat `to do` as the ready-to-work queue and keep `backlog` for future ideas only.
 3. Move task to `in progress` when implementation starts.
-4. After commit, add GitHub commit URL to the task (description section like `GitHub Commits:` or comment).
-5. Add an activity comment with:
+4. Immediately post a kickoff comment containing the implementation plan. Do this yourself; never ask the user to copy/paste updates into ClickUp.
+5. Post progress comments during execution at major milestones (after plan/context, after code edits, after automated tests).
+6. After commit, add GitHub commit URL to the task (use task link API when authorized; if link API fails, include URL in comment).
+7. Add a final activity comment with:
    - what you changed
    - what tests you ran (commands + pass/fail outcome)
    - where the automated test files are (repo-relative file paths for added/updated coverage)
    - any manual smoke checks performed (or explicitly state none)
    - outcome/result
-6. Link related tasks when work has dependency/traceability context (for example, bug <-> originating user story).
-7. Bugs must use ClickUp task type `bug` (not story/task type), include repro details, and link back to the related `[US-xxx]` story task.
-8. Move the story task to `testing` when it is ready for manual validation.
+8. Ensure the final activity comment content is consistent with your final user-facing summary (same key changes, tests, outcomes).
+9. Prefix each task comment with `[<CLICKUP_COMMENT_AUTHOR_LABEL>]` so comments are clearly automated by Jarvis/Codex.
+10. Link related tasks when work has dependency/traceability context (for example, bug <-> originating user story).
+11. Bugs must use ClickUp task type `bug` (not story/task type), include repro details, and link back to the related `[US-xxx]` story task.
+12. Move the story task to `testing` when it is ready for manual validation.
 
-Use this activity comment template:
-- `Changed:` concise implementation summary
-- `Tests Run:` command list + pass/fail
-- `Test Files:` repo-relative paths (for example `tests/Feature/BookingsTest.php`)
-- `Smoke Check:` manual check result or `none`
-- `Outcome:` ready for testing / blocked (+ reason)
+Use these activity comment templates:
+- `Kickoff:` `[Jarvis/Codex][US-xxx][start]` + `Plan:` + `Scope/Assumptions:`
+- `Progress:` `[Jarvis/Codex][US-xxx][progress]` + `Now:` + `Next:`
+- `Completion:` `[Jarvis/Codex][US-xxx][testing]` + `Changed:` + `Tests Run:` + `Test Files:` + `Smoke Check:` + `Outcome:`
 
 If ClickUp config is missing, continue normal implementation and explicitly report ClickUp was skipped due to missing configuration.
 
