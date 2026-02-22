@@ -82,6 +82,8 @@ If ClickUp config is missing, continue normal implementation and explicitly repo
 
 ## Unattended Execution (Mandatory)
 
+- Pre-existing modified/untracked files in the project are normal for iterative runs. Do not ask the user whether to proceed because the workspace is dirty.
+- When unrelated local changes exist, continue the story; preserve those files and avoid reverting or unintentionally committing unrelated diffs.
 - Do not block waiting for interactive approval prompts. Jarvis runs unattended.
 - Git commands within the active project repo are allowed and should be attempted normally.
 - If a required command cannot run without manual approval (or host-level access), do all of the following:

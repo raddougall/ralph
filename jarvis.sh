@@ -261,6 +261,35 @@ story_note() {
   jq -r --arg story_id "$story_id" '.userStories[] | select(.id == $story_id) | .notes // ""' "$PRD_FILE" 2>/dev/null | head -n 1
 }
 
+story_is_blocked() {
+  local story_id="$1"
+  jq -e --arg story_id "$story_id" '.userStories[] | select(.id == $story_id and ((.notes // "") | startswith("BLOCKED:")))' "$PRD_FILE" >/dev/null 2>&1
+}
+mark_story_blocked() {
+  local story_id="$1"
+  local reason="$2"
+  local blocked_note="BLOCKED: $reason"
+  local tmp_file
+
+  if ! jq -e --arg story_id "$story_id" '.userStories[] | select(.id == $story_id)' "$PRD_FILE" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  tmp_file="$(mktemp)"
+  jq --arg story_id "$story_id" --arg blocked_note "$blocked_note" '
+    (.userStories[] | select(.id == $story_id) | .passes) = false
+    | (.userStories[] | select(.id == $story_id) | .notes) = $blocked_note
+  ' "$PRD_FILE" > "$tmp_file"
+  mv "$tmp_file" "$PRD_FILE"
+
+  return 0
+}
+
+output_requests_user_input() {
+  local output="$1"
+
+  echo "$output" | grep -Eqi "i need your direction|i need your input|choose one:|please choose one|which option|how would you like to proceed|awaiting your confirmation|requires your confirmation"
+}
 record_approval_queue_lines() {
   if [ -f "$APPROVAL_QUEUE_FILE" ]; then
     APPROVAL_QUEUE_BEFORE_LINES="$(wc -l < "$APPROVAL_QUEUE_FILE" 2>/dev/null || echo 0)"
@@ -295,6 +324,9 @@ extract_recovery_commit_command() {
 
   command_line="$(grep -E "story=$story_id \| command=git add .*&& git commit -m " "$APPROVAL_QUEUE_FILE" | tail -n 1 | sed -E 's/^.*command=//; s/ \| reason=.*$//')"
 
+  if [ -z "$command_line" ]; then
+    command_line="$(grep -E "story=$story_id\\\\ncommand=git add .*&& git commit -m " "$APPROVAL_QUEUE_FILE" | tail -n 1 | sed -E 's/^.*\\\\ncommand=//; s/\\\\nreason=.*$//')"
+  fi
   if [ -z "$command_line" ]; then
     command_line="$(grep -E "\[$story_id\] git add .*&& git commit -m " "$APPROVAL_QUEUE_FILE" | tail -n 1 | sed -E "s/^.*\[$story_id\] //; s/ \| .*$//")"
   fi
@@ -770,10 +802,30 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     exit 0
   fi
 
-  if echo "$OUTPUT" | grep -q "<promise>BLOCKED</promise>"; then
+  if [ -n "$CURRENT_STORY_ID" ] && output_requests_user_input "$OUTPUT"; then
+    WAIT_REASON="Agent requested direct user input before proceeding (no unattended fallback applied)."
+    mark_story_blocked "$CURRENT_STORY_ID" "$WAIT_REASON" || true
+
+    if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then
+      clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_WAITING" || true
+      clickup_api_post_comment "$CURRENT_TASK_ID" "[$CLICKUP_COMMENT_AUTHOR_LABEL][$CURRENT_STORY_ID][waiting]
+Outcome:
+- Story paused because the agent requested direct user input.
+Reason:
+- ${WAIT_REASON}." || true
+    fi
+
+    echo ""
+    echo "Jarvis marked $CURRENT_STORY_ID as waiting due user-input request and will continue to next iteration."
+
+    sleep 2
+    continue
+  fi
+
+  if echo "$OUTPUT" | grep -q "<promise>BLOCKED</promise>" || { [ -n "$CURRENT_STORY_ID" ] && story_is_blocked "$CURRENT_STORY_ID"; }; then
     RECOVERED=0
 
-    if [ -n "$CURRENT_STORY_ID" ] && echo "$OUTPUT" | grep -q ".git/index.lock"; then
+    if [ -n "$CURRENT_STORY_ID" ]; then
       if run_git_commit_recovery "$CURRENT_STORY_ID"; then
         RECOVERED=1
         if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then
