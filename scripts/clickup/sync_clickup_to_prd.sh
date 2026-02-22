@@ -39,6 +39,7 @@ PROGRESS_FILE="${PROGRESS_FILE:-./progress.txt}"
 DRY_RUN="${DRY_RUN:-0}"
 CLICKUP_PRUNE_MISSING="${CLICKUP_PRUNE_MISSING:-0}"
 CLICKUP_SYNC_APPEND_PROGRESS="${CLICKUP_SYNC_APPEND_PROGRESS:-1}"
+CLICKUP_STATUS_TESTING="${CLICKUP_STATUS_TESTING:-testing}"
 
 if [[ -z "${CLICKUP_TOKEN:-}" ]]; then
   echo "Missing required env var: CLICKUP_TOKEN" >&2
@@ -114,7 +115,7 @@ while :; do
 done
 
 stories_from_clickup="$(
-  jq -c '
+  jq -c --arg testing_status "$(echo "$CLICKUP_STATUS_TESTING" | tr '[:upper:]' '[:lower:]')" '
     def trim: gsub("^[[:space:]]+|[[:space:]]+$"; "");
     def after($token): if contains($token) then (split($token)[1]) else "" end;
     def until_any($tokens):
@@ -173,7 +174,8 @@ stories_from_clickup="$(
           priority: priority_to_local($task.priority.priority // ""),
           passes: (
             (($task.status.type // "") | ascii_downcase) as $type
-            | ($type == "done" or $type == "closed")
+            | (($task.status.status // "") | ascii_downcase) as $status
+            | ($type == "done" or $type == "closed" or $status == $testing_status)
           )
         }
     ]
