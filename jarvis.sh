@@ -124,6 +124,109 @@ has_clickup_config() {
   return 0
 }
 
+extract_host_from_url() {
+  local input="$1"
+  local host="$input"
+
+  host="${host#*://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  echo "$host"
+}
+
+check_https_host_reachable() {
+  local host="$1"
+  local timeout_seconds="${JARVIS_NETWORK_PREFLIGHT_TIMEOUT_SECONDS:-${RALPH_NETWORK_PREFLIGHT_TIMEOUT_SECONDS:-8}}"
+
+  if [ -z "$host" ]; then
+    return 1
+  fi
+
+  curl -sS -I --max-time "$timeout_seconds" "https://$host" >/dev/null 2>&1
+}
+
+run_network_preflight() {
+  local enabled="${JARVIS_NETWORK_PREFLIGHT:-${RALPH_NETWORK_PREFLIGHT:-1}}"
+  local strict_mode="${JARVIS_NETWORK_PREFLIGHT_STRICT:-${RALPH_NETWORK_PREFLIGHT_STRICT:-1}}"
+  local -a hosts=()
+  local -a unique_hosts=()
+  local -a failed_hosts=()
+  local host
+
+  if [ "$enabled" = "0" ]; then
+    return 0
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    if [ "$strict_mode" = "1" ]; then
+      echo "Network preflight failed: curl is required but not available." >&2
+      exit 2
+    fi
+    echo "Warning: skipping network preflight because curl is unavailable (set strict mode to fail instead)." >&2
+    return 0
+  fi
+
+  if [ "$AGENT" = "codex" ]; then
+    hosts+=("$(extract_host_from_url "${JARVIS_OPENAI_PREFLIGHT_URL:-${RALPH_OPENAI_PREFLIGHT_URL:-https://chatgpt.com}}")")
+  fi
+
+  if has_clickup_config; then
+    hosts+=("$(extract_host_from_url "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}")")
+  fi
+
+  if [ -n "${JARVIS_NETWORK_PREFLIGHT_HOSTS:-${RALPH_NETWORK_PREFLIGHT_HOSTS:-}}" ]; then
+    local old_ifs="$IFS"
+    IFS=","
+    for host in ${JARVIS_NETWORK_PREFLIGHT_HOSTS:-${RALPH_NETWORK_PREFLIGHT_HOSTS:-}}; do
+      hosts+=("$host")
+    done
+    IFS="$old_ifs"
+  fi
+
+  for host in "${hosts[@]}"; do
+    if [ -z "$host" ]; then
+      continue
+    fi
+    local seen=0
+    local existing
+    for existing in "${unique_hosts[@]}"; do
+      if [ "$existing" = "$host" ]; then
+        seen=1
+        break
+      fi
+    done
+    if [ "$seen" -eq 0 ]; then
+      unique_hosts+=("$host")
+    fi
+  done
+
+  if [ "${#unique_hosts[@]}" -eq 0 ]; then
+    return 0
+  fi
+
+  for host in "${unique_hosts[@]}"; do
+    if ! check_https_host_reachable "$host"; then
+      failed_hosts+=("$host")
+    fi
+  done
+
+  if [ "${#failed_hosts[@]}" -eq 0 ]; then
+    echo "Network preflight passed for: ${unique_hosts[*]}"
+    return 0
+  fi
+
+  echo "Network preflight failed. Unreachable hosts: ${failed_hosts[*]}" >&2
+  echo "This run context appears to block external DNS/network (OpenAI/ClickUp)." >&2
+  echo "Re-run with network-enabled permissions or disable strict mode for diagnostics." >&2
+
+  if [ "$strict_mode" = "1" ]; then
+    exit 2
+  fi
+
+  echo "Warning: continuing despite failed network preflight (JARVIS_NETWORK_PREFLIGHT_STRICT=0)." >&2
+  return 0
+}
+
 run_clickup_prd_pull_sync() {
   local should_sync="${JARVIS_CLICKUP_SYNC_ON_START:-${RALPH_CLICKUP_SYNC_ON_START:-1}}"
   local strict_sync="${JARVIS_CLICKUP_SYNC_STRICT:-${RALPH_CLICKUP_SYNC_STRICT:-0}}"
@@ -318,6 +421,7 @@ if [ -n "${JARVIS_DEBUG_ENV:-${RALPH_DEBUG_ENV:-}}" ]; then
   } >> "$LOG_FILE" 2>&1
 fi
 
+run_network_preflight
 run_project_launcher_sync
 run_clickup_prd_pull_sync
 

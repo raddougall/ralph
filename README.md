@@ -162,7 +162,7 @@ OPENAI_API_KEY=...
 
 The project launcher `scripts/jarvis/jarvis.sh` auto-loads this local file before invoking the shared Jarvis runtime.
 
-Jarvis also syncs `~/.codex/auth.json` into project-local `CODEX_HOME` (`<project>/.codex/auth.json`) so authenticated Codex runs still work with project-scoped session storage.
+Jarvis syncs `~/.codex/auth.json` and `~/.codex/config.toml` into active `CODEX_HOME` so authenticated/trusted Codex runs still work with project-scoped session storage.
 Jarvis also auto-syncs project-local wrappers/docs/templates from master on run start (additive updates; existing secret values are preserved).
 
 To customize Codex flags, set:
@@ -182,6 +182,11 @@ Project scoping controls:
 - `JARVIS_PROMPT_FILE` (optional explicit prompt path)
 - `JARVIS_PROJECT_SYNC_ON_START` (default: `1`, auto-runs `scripts/install-project-launcher.sh` against the active project before iterations)
 - `JARVIS_PROJECT_SYNC_STRICT` (default: `0`, set `1` to fail fast if project sync fails)
+- `JARVIS_NETWORK_PREFLIGHT` (default: `1`, verify external endpoint reachability before iterations)
+- `JARVIS_NETWORK_PREFLIGHT_STRICT` (default: `1`, fail fast when preflight fails; set `0` to continue with warning)
+- `JARVIS_NETWORK_PREFLIGHT_TIMEOUT_SECONDS` (default: `8`, per-host timeout)
+- `JARVIS_OPENAI_PREFLIGHT_URL` (default: `https://chatgpt.com`, endpoint used to validate OpenAI reachability for Codex runs)
+- `JARVIS_NETWORK_PREFLIGHT_HOSTS` (optional comma-separated extra hosts to validate)
 - If `JARVIS_PROMPT_FILE` is unset and `<project>/.jarvis/prompt.md` exists, Jarvis uses that project-local prompt override. Legacy `.ralph/prompt.md` is still supported.
 
 Manual project sync command:
