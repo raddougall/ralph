@@ -9,6 +9,7 @@ AGENT=${JARVIS_AGENT:-${RALPH_AGENT:-amp}}
 AMP_FLAGS=${JARVIS_AMP_FLAGS:-${RALPH_AMP_FLAGS:---dangerously-allow-all}}
 CODEX_GLOBAL_FLAGS=${JARVIS_CODEX_GLOBAL_FLAGS:-${RALPH_CODEX_GLOBAL_FLAGS:---sandbox workspace-write -a never}}
 CODEX_FLAGS=${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:---color never}}
+CODEX_ALLOW_GIT_WRITE=${JARVIS_CODEX_ALLOW_GIT_WRITE:-${RALPH_CODEX_ALLOW_GIT_WRITE:-0}}
 CODEX_BIN=${JARVIS_CODEX_BIN:-${RALPH_CODEX_BIN:-codex}}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
@@ -336,7 +337,11 @@ if ! can_write_dir "$CODEX_HOME/sessions"; then
   fi
 fi
 
-if [ -n "${JARVIS_CODEX_ENABLE_NETWORK:-${RALPH_CODEX_ENABLE_NETWORK:-}}" ]; then
+if [ "$CODEX_ALLOW_GIT_WRITE" = "1" ]; then
+  CODEX_GLOBAL_FLAGS="--sandbox danger-full-access -a never"
+fi
+
+if [ -n "${JARVIS_CODEX_ENABLE_NETWORK:-${RALPH_CODEX_ENABLE_NETWORK:-}}" ] && echo "$CODEX_GLOBAL_FLAGS" | grep -q -- "--sandbox workspace-write"; then
   CODEX_FLAGS="$CODEX_FLAGS --config sandbox_workspace_write.network_access=true"
 fi
 
