@@ -168,7 +168,6 @@ Jarvis also auto-syncs project-local wrappers/docs/templates from master on run 
 To customize Codex flags, set:
 - `JARVIS_CODEX_GLOBAL_FLAGS` (default: `--sandbox workspace-write -a never`)
 - `JARVIS_CODEX_FLAGS` (default: `--color never`)
-- `JARVIS_CODEX_ALLOW_GIT_WRITE` (default: `0`; set `1` to run Codex with `--sandbox danger-full-access -a never`, which avoids `.git/index.lock` sandbox failures during autonomous commits)
 
 Example:
 ```bash

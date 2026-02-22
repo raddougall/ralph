@@ -9,8 +9,17 @@ AGENT=${JARVIS_AGENT:-${RALPH_AGENT:-amp}}
 AMP_FLAGS=${JARVIS_AMP_FLAGS:-${RALPH_AMP_FLAGS:---dangerously-allow-all}}
 CODEX_GLOBAL_FLAGS=${JARVIS_CODEX_GLOBAL_FLAGS:-${RALPH_CODEX_GLOBAL_FLAGS:---sandbox workspace-write -a never}}
 CODEX_FLAGS=${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:---color never}}
-CODEX_ALLOW_GIT_WRITE=${JARVIS_CODEX_ALLOW_GIT_WRITE:-${RALPH_CODEX_ALLOW_GIT_WRITE:-0}}
 CODEX_BIN=${JARVIS_CODEX_BIN:-${RALPH_CODEX_BIN:-codex}}
+CLICKUP_STATUS_IN_PROGRESS=${CLICKUP_STATUS_IN_PROGRESS:-in progress}
+CLICKUP_STATUS_TESTING=${CLICKUP_STATUS_TESTING:-testing}
+CLICKUP_STATUS_WAITING=${CLICKUP_STATUS_WAITING:-waiting}
+CLICKUP_STATUS_STUCK=${CLICKUP_STATUS_STUCK:-stuck}
+CLICKUP_COMMENT_AUTHOR_LABEL=${CLICKUP_COMMENT_AUTHOR_LABEL:-Jarvis/Codex}
+CLICKUP_LIST_ID_RESOLVED=""
+CLICKUP_AUTH_HEADER=""
+CURRENT_STORY_ID=""
+CURRENT_TASK_ID=""
+APPROVAL_QUEUE_BEFORE_LINES=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -115,6 +124,16 @@ sync_codex_runtime_files() {
   fi
 }
 
+load_project_clickup_env() {
+  local clickup_env_file="${JARVIS_CLICKUP_ENV_FILE:-$PROJECT_DIR/scripts/clickup/.env.clickup}"
+
+  if [ -f "$clickup_env_file" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$clickup_env_file"
+    set +a
+  fi
+}
 has_clickup_config() {
   if [ -z "${CLICKUP_TOKEN:-}" ]; then
     return 1
@@ -122,6 +141,222 @@ has_clickup_config() {
   if [ -z "${CLICKUP_LIST_ID:-${CLICKUP_LIST_URL:-}}" ]; then
     return 1
   fi
+  return 0
+}
+
+clickup_extract_list_id() {
+  local input="$1"
+
+  if [[ "$input" =~ /li/([0-9]+) ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return
+  fi
+
+  if [[ "$input" =~ ^[0-9]+$ ]]; then
+    echo "$input"
+    return
+  fi
+
+  echo ""
+}
+
+clickup_prepare_context() {
+  local list_source
+
+  CLICKUP_LIST_ID_RESOLVED=""
+  CLICKUP_AUTH_HEADER=""
+
+  if ! has_clickup_config; then
+    return 1
+  fi
+
+  if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    return 1
+  fi
+
+  list_source="${CLICKUP_LIST_ID:-${CLICKUP_LIST_URL:-}}"
+  CLICKUP_LIST_ID_RESOLVED="$(clickup_extract_list_id "$list_source")"
+  if [ -z "$CLICKUP_LIST_ID_RESOLVED" ]; then
+    return 1
+  fi
+
+  if [[ "$CLICKUP_TOKEN" == pk_* ]]; then
+    CLICKUP_AUTH_HEADER="Authorization: $CLICKUP_TOKEN"
+  else
+    CLICKUP_AUTH_HEADER="Authorization: Bearer $CLICKUP_TOKEN"
+  fi
+
+  return 0
+}
+
+clickup_is_ready() {
+  [ -n "$CLICKUP_LIST_ID_RESOLVED" ] && [ -n "$CLICKUP_AUTH_HEADER" ]
+}
+
+clickup_api_get() {
+  local path="$1"
+  curl -sS -H "$CLICKUP_AUTH_HEADER" -H "Content-Type: application/json" "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}$path"
+}
+
+clickup_api_put_status() {
+  local task_id="$1"
+  local status="$2"
+
+  jq -n --arg status "$status" '{status:$status}' \
+    | curl -sS -X PUT "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}/task/$task_id" \
+      -H "$CLICKUP_AUTH_HEADER" \
+      -H "Content-Type: application/json" \
+      --data-binary @- >/dev/null
+}
+
+clickup_api_post_comment() {
+  local task_id="$1"
+  local comment="$2"
+
+  jq -n --arg comment_text "$comment" '{comment_text:$comment_text, notify_all:false}'     | curl -sS -X POST "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}/task/$task_id/comment"       -H "$CLICKUP_AUTH_HEADER"       -H "Content-Type: application/json"       --data-binary @- >/dev/null
+}
+
+clickup_find_task_id_for_story() {
+  local story_id="$1"
+  local page=0
+  local response
+  local count
+  local task_id
+
+  while :; do
+    response="$(clickup_api_get "/list/$CLICKUP_LIST_ID_RESOLVED/task?include_closed=true&page=$page")" || return 1
+    count="$(jq -r '.tasks | length' <<<"$response" 2>/dev/null || echo 0)"
+    if [ "$count" = "0" ]; then
+      break
+    fi
+
+    task_id="$(jq -r --arg prefix "[$story_id] " '.tasks[] | select(.name | startswith($prefix)) | .id' <<<"$response" | head -n 1)"
+    if [ -n "$task_id" ] && [ "$task_id" != "null" ]; then
+      echo "$task_id"
+      return 0
+    fi
+
+    page=$((page + 1))
+  done
+
+  return 1
+}
+
+next_unblocked_story_id() {
+  jq -r '
+    (.userStories // [])
+    | map(select((.passes == false) and (((.notes // "") | startswith("BLOCKED:")) | not)))
+    | sort_by(.priority // 999999)
+    | .[0].id // empty
+  ' "$PRD_FILE"
+}
+
+story_passes() {
+  local story_id="$1"
+  jq -e --arg story_id "$story_id" '.userStories[] | select(.id == $story_id and .passes == true)' "$PRD_FILE" >/dev/null 2>&1
+}
+
+story_note() {
+  local story_id="$1"
+  jq -r --arg story_id "$story_id" '.userStories[] | select(.id == $story_id) | .notes // ""' "$PRD_FILE" 2>/dev/null | head -n 1
+}
+
+record_approval_queue_lines() {
+  if [ -f "$APPROVAL_QUEUE_FILE" ]; then
+    APPROVAL_QUEUE_BEFORE_LINES="$(wc -l < "$APPROVAL_QUEUE_FILE" 2>/dev/null || echo 0)"
+  else
+    APPROVAL_QUEUE_BEFORE_LINES=0
+  fi
+}
+
+new_approval_queue_entries_for_story() {
+  local story_id="$1"
+  local total_lines
+
+  if [ ! -f "$APPROVAL_QUEUE_FILE" ]; then
+    return 0
+  fi
+
+  total_lines="$(wc -l < "$APPROVAL_QUEUE_FILE" 2>/dev/null || echo 0)"
+  if [ "$total_lines" -le "$APPROVAL_QUEUE_BEFORE_LINES" ]; then
+    return 0
+  fi
+
+  tail -n "+$((APPROVAL_QUEUE_BEFORE_LINES + 1))" "$APPROVAL_QUEUE_FILE"     | grep -E "(\[$story_id\]|story=$story_id)" || true
+}
+
+extract_recovery_commit_command() {
+  local story_id="$1"
+  local command_line=""
+
+  if [ ! -f "$APPROVAL_QUEUE_FILE" ]; then
+    return 1
+  fi
+
+  command_line="$(grep -E "story=$story_id \| command=git add .*&& git commit -m " "$APPROVAL_QUEUE_FILE" | tail -n 1 | sed -E 's/^.*command=//; s/ \| reason=.*$//')"
+
+  if [ -z "$command_line" ]; then
+    command_line="$(grep -E "\[$story_id\] git add .*&& git commit -m " "$APPROVAL_QUEUE_FILE" | tail -n 1 | sed -E "s/^.*\[$story_id\] //; s/ \| .*$//")"
+  fi
+
+  if [ -z "$command_line" ]; then
+    return 1
+  fi
+
+  echo "$command_line"
+}
+
+is_safe_recovery_command() {
+  local command_line="$1"
+
+  if [[ "$command_line" != git\ add*' && git commit -m '* ]]; then
+    return 1
+  fi
+
+  case "$command_line" in
+    *';'*|*'|'*|*'$('*|*'`'*) return 1 ;;
+  esac
+
+  return 0
+}
+
+run_git_commit_recovery() {
+  local story_id="$1"
+  local command_line
+  local recovery_note
+  local tmp_file
+
+  command_line="$(extract_recovery_commit_command "$story_id" || true)"
+  if [ -z "$command_line" ]; then
+    return 1
+  fi
+
+  if ! is_safe_recovery_command "$command_line"; then
+    echo "Warning: refusing unsafe recovery command for $story_id" >&2
+    return 1
+  fi
+
+  if ! (cd "$PROJECT_DIR" && bash -lc "$command_line"); then
+    return 1
+  fi
+
+  recovery_note="Committed by Jarvis runner after recovering nested git sandbox lock."
+  tmp_file="$(mktemp)"
+  jq --arg story_id "$story_id" --arg recovery_note "$recovery_note" '
+    (.userStories[] | select(.id == $story_id) | .passes) = true
+    | (.userStories[] | select(.id == $story_id) | .notes) |= (if ((. // "") | startswith("BLOCKED:")) then $recovery_note else . end)
+  ' "$PRD_FILE" > "$tmp_file"
+  mv "$tmp_file" "$PRD_FILE"
+
+  {
+    echo "## $(date -u '+%Y-%m-%d %H:%M:%S UTC') - $story_id"
+    echo "Session: Jarvis commit recovery"
+    echo "- Recovered commit after nested Codex sandbox blocked .git/index.lock."
+    echo "- Executed queued git command from approval queue in runner context."
+    echo "- Restored story state to passes=true in prd.json."
+    echo "---"
+  } >> "$PROGRESS_FILE"
+
   return 0
 }
 
@@ -337,10 +572,6 @@ if ! can_write_dir "$CODEX_HOME/sessions"; then
   fi
 fi
 
-if [ "$CODEX_ALLOW_GIT_WRITE" = "1" ]; then
-  CODEX_GLOBAL_FLAGS="--sandbox danger-full-access -a never"
-fi
-
 if [ -n "${JARVIS_CODEX_ENABLE_NETWORK:-${RALPH_CODEX_ENABLE_NETWORK:-}}" ] && echo "$CODEX_GLOBAL_FLAGS" | grep -q -- "--sandbox workspace-write"; then
   CODEX_FLAGS="$CODEX_FLAGS --config sandbox_workspace_write.network_access=true"
 fi
@@ -426,9 +657,11 @@ if [ -n "${JARVIS_DEBUG_ENV:-${RALPH_DEBUG_ENV:-}}" ]; then
   } >> "$LOG_FILE" 2>&1
 fi
 
+load_project_clickup_env
 run_network_preflight
 run_project_launcher_sync
 run_clickup_prd_pull_sync
+clickup_prepare_context || true
 
 # Archive previous run if branch changed
 if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
@@ -487,6 +720,17 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo "  Jarvis Iteration $i of $MAX_ITERATIONS"
   echo "═══════════════════════════════════════════════════════"
   
+  CURRENT_STORY_ID="$(next_unblocked_story_id)"
+  CURRENT_TASK_ID=""
+  record_approval_queue_lines
+
+  if clickup_is_ready && [ -n "$CURRENT_STORY_ID" ]; then
+    CURRENT_TASK_ID="$(clickup_find_task_id_for_story "$CURRENT_STORY_ID" || true)"
+    if [ -n "$CURRENT_TASK_ID" ]; then
+      clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_IN_PROGRESS" || true
+    fi
+  fi
+
   # Run the selected agent with the Jarvis prompt
   if [ "$AGENT" = "codex" ]; then
     LAST_MESSAGE_FILE=$(mktemp "${PROJECT_DIR}/.codex-last-message.XXXXXX")
@@ -527,12 +771,74 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   fi
 
   if echo "$OUTPUT" | grep -q "<promise>BLOCKED</promise>"; then
+    RECOVERED=0
+
+    if [ -n "$CURRENT_STORY_ID" ] && echo "$OUTPUT" | grep -q ".git/index.lock"; then
+      if run_git_commit_recovery "$CURRENT_STORY_ID"; then
+        RECOVERED=1
+        if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then
+          clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_TESTING" || true
+          clickup_api_post_comment "$CURRENT_TASK_ID" "[$CLICKUP_COMMENT_AUTHOR_LABEL][$CURRENT_STORY_ID][testing][jarvis-recovery]
+Changed:
+- Jarvis recovered commit after nested sandbox blocked .git/index.lock.
+Outcome:
+- Commit recovered in runner context; task returned to testing." || true
+        fi
+      fi
+    fi
+
+    if [ "$RECOVERED" = "1" ]; then
+      echo ""
+      echo "Jarvis recovered blocked git commit for $CURRENT_STORY_ID; continuing."
+      sleep 2
+      continue
+    fi
+
+    NEEDS_USER=0
+    if echo "$OUTPUT" | grep -Eqi "waiting for approvals|manual approval|requires approval|approval queue"; then
+      NEEDS_USER=1
+    else
+      if new_approval_queue_entries_for_story "$CURRENT_STORY_ID" | grep -Eqi "approval|approve"; then
+        NEEDS_USER=1
+      fi
+    fi
+
+    if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then
+      BLOCK_NOTE="$(story_note "$CURRENT_STORY_ID")"
+      if [ "$NEEDS_USER" = "1" ]; then
+        clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_WAITING" || true
+        clickup_api_post_comment "$CURRENT_TASK_ID" "[$CLICKUP_COMMENT_AUTHOR_LABEL][$CURRENT_STORY_ID][waiting]
+Outcome:
+- Story blocked waiting for user action/approval.
+Reason:
+- ${BLOCK_NOTE:-Blocked waiting for approval}." || true
+      else
+        clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_STUCK" || true
+        clickup_api_post_comment "$CURRENT_TASK_ID" "[$CLICKUP_COMMENT_AUTHOR_LABEL][$CURRENT_STORY_ID][stuck]
+Outcome:
+- Story is stuck due to execution/runtime blocker.
+Reason:
+- ${BLOCK_NOTE:-Blocked by runtime error}." || true
+      fi
+    fi
+
     echo ""
-    echo "Jarvis is blocked waiting for approvals. See: $APPROVAL_QUEUE_FILE"
-    echo "Blocked at iteration $i of $MAX_ITERATIONS"
-    exit 2
+    if [ "$NEEDS_USER" = "1" ]; then
+      echo "Jarvis marked $CURRENT_STORY_ID as waiting and will continue to next iteration."
+    else
+      echo "Jarvis marked $CURRENT_STORY_ID as stuck and will continue to next iteration."
+    fi
+
+    sleep 2
+    continue
   fi
   
+  if clickup_is_ready && [ -n "$CURRENT_STORY_ID" ] && [ -n "$CURRENT_TASK_ID" ]; then
+    if story_passes "$CURRENT_STORY_ID"; then
+      clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_TESTING" || true
+    fi
+  fi
+
   echo "Iteration $i complete. Continuing..."
   sleep 2
 done
