@@ -47,6 +47,11 @@ npm run dev
 - Codex unattended default is top-level `--sandbox workspace-write -a never` plus exec flags `--color never`; this avoids interactive approval pauses during long runs.
 - When Jarvis uses project-local `CODEX_HOME`, it mirrors `~/.codex/auth.json` into the project home so Codex remains authenticated without using global session storage.
 - For Codex runs, detect completion from `--output-last-message` content, not streamed logs, to avoid false `<promise>COMPLETE</promise>` matches.
+- Before each iteration, run git preflight checks that verify `.git` writeability and fail before story edits with explicit recovery guidance; temp branch probes are only needed when branch policy uses PRD branch switching.
+- Treat repeated Codex stream disconnect/reconnect loops (for example `codex/responses` transport interruptions) as retryable infrastructure failures, not story failures.
+- Use `JARVIS_BRANCH_POLICY` to control branching strategy per run (`prd`, `main`, `current`) so early-system work can go direct to main without per-story branch creation.
+- Default commit scope is durable story artifacts; local scratch/session notes (especially `.gitignore`d files) should remain uncommitted unless explicitly requested as long-term docs.
+- Jarvis pins each iteration to the selected story ID, logs story id/title/priority before launch, and hard-fails if any non-target story state changes during that iteration.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.
 - Project iterations must run with writable access inside `JARVIS_PROJECT_DIR`; read-only intent applies to paths outside the active project root, not the project itself.
@@ -56,5 +61,6 @@ npm run dev
 - Every project must maximize automated testing for changed behavior and keep CI-ready, non-interactive test scripts/commands up to date.
 - Always update AGENTS.md with discovered patterns for future iterations
 - If ClickUp credentials are configured and `scripts/clickup/sync_clickup_to_prd.sh` exists, Jarvis pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` at run start (default enabled).
+- Optionally sync a human-readable directives reference task in ClickUp at run start via `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START=1` using `scripts/clickup/sync_jarvis_directives_to_clickup.sh`.
 - If ClickUp credentials are configured, every story must use `to do` as the ready queue (`backlog` is ideas only), move status `in progress` -> `testing`, and post live task comments at `start`, `progress`, and `testing` phases with a `Jarvis/Codex` label; include commit linkage plus activity notes (implementation details, test commands/outcomes, test file paths, smoke result), keep ClickUp note content consistent with terminal summaries, link related tasks for traceability, and use ClickUp task type `bug` for bug work linked back to the originating story.
 - Approval-gated commands should be queued in `approval-queue.txt`, blocked stories marked with `BLOCKED:` in `prd.json` notes, and iterations should continue with remaining unblocked stories.

@@ -44,6 +44,10 @@ CLICKUP_POST_TESTING_COMMENT=1
 CLICKUP_MOVE_TO_TESTING=1
 CLICKUP_MOVE_TO_IN_PROGRESS=1
 CLICKUP_DRY_RUN=0
+CLICKUP_DIRECTIVES_TASK_ID=
+CLICKUP_DIRECTIVES_TASK_NAME="[JARVIS-DIRECTIVES] Jarvis Runtime Directives"
+CLICKUP_DIRECTIVES_SOURCE_FILE=
+CLICKUP_DIRECTIVES_POST_COMMENT=1
 CLICKUP_ENV
 }
 
@@ -180,6 +184,8 @@ OPENAI_API_KEY=
 # JARVIS_CODEX_ENABLE_NETWORK=1
 # JARVIS_CLICKUP_SYNC_ON_START=1
 # JARVIS_CLICKUP_SYNC_STRICT=0
+# JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START=0
+# JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT=0
 # JARVIS_PROJECT_SYNC_ON_START=1
 # JARVIS_PROJECT_SYNC_STRICT=0
 JARVIS_ENV
@@ -268,6 +274,32 @@ exec "$MASTER_SCRIPT" "$@"
 CLICKUP_PULL
 chmod +x "$TARGET_CLICKUP_DIR/sync_clickup_to_prd.sh"
 
+cat > "$TARGET_CLICKUP_DIR/sync_jarvis_directives_to_clickup.sh" <<'CLICKUP_DIRECTIVES'
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+JARVIS_HOME="${JARVIS_HOME:-${RALPH_HOME:-}}"
+if [ -z "$JARVIS_HOME" ]; then
+  if [ -d "$HOME/CodeDev/Jarvis" ]; then
+    JARVIS_HOME="$HOME/CodeDev/Jarvis"
+  else
+    JARVIS_HOME="$HOME/CodeDev/Ralph"
+  fi
+fi
+MASTER_SCRIPT="$JARVIS_HOME/scripts/clickup/sync_jarvis_directives_to_clickup.sh"
+
+if [ ! -x "$MASTER_SCRIPT" ]; then
+  echo "Master ClickUp script not found or not executable: $MASTER_SCRIPT" >&2
+  echo "Set JARVIS_HOME (or legacy RALPH_HOME) to your Jarvis repo path." >&2
+  exit 1
+fi
+
+cd "$PROJECT_ROOT"
+exec "$MASTER_SCRIPT" "$@"
+CLICKUP_DIRECTIVES
+chmod +x "$TARGET_CLICKUP_DIR/sync_jarvis_directives_to_clickup.sh"
+
 cat > "$TARGET_CLICKUP_DIR/README.md" <<'CLICKUP_DOC'
 # ClickUp Scripts (Project-Local Wrappers)
 
@@ -276,6 +308,7 @@ This project uses shared ClickUp scripts from Jarvis.
 - `scripts/clickup/get_oauth_token.sh`
 - `scripts/clickup/sync_clickup_to_prd.sh`
 - `scripts/clickup/sync_prd_to_clickup.sh`
+- `scripts/clickup/sync_jarvis_directives_to_clickup.sh`
 
 These local wrappers execute the master scripts while keeping defaults project-local
 (for example `PRD_FILE=./prd.json`).
@@ -340,6 +373,10 @@ ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_POST_TESTING_
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_MOVE_TO_TESTING" "1"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_MOVE_TO_IN_PROGRESS" "1"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_DRY_RUN" "0"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_DIRECTIVES_TASK_ID" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_DIRECTIVES_TASK_NAME" "\"[JARVIS-DIRECTIVES] Jarvis Runtime Directives\""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_DIRECTIVES_SOURCE_FILE" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup.example" "CLICKUP_DIRECTIVES_POST_COMMENT" "1"
 
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_CLIENT_ID" ""
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_CLIENT_SECRET" ""
@@ -361,6 +398,10 @@ ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_POST_TESTING_COMMENT"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_MOVE_TO_TESTING" "1"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_MOVE_TO_IN_PROGRESS" "1"
 ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_DRY_RUN" "0"
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_DIRECTIVES_TASK_ID" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_DIRECTIVES_TASK_NAME" "\"[JARVIS-DIRECTIVES] Jarvis Runtime Directives\""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_DIRECTIVES_SOURCE_FILE" ""
+ensure_env_var "$TARGET_CLICKUP_DIR/.env.clickup" "CLICKUP_DIRECTIVES_POST_COMMENT" "1"
 
 ensure_gitignore_entry() {
   local entry="$1"

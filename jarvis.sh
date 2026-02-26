@@ -10,6 +10,8 @@ AMP_FLAGS=${JARVIS_AMP_FLAGS:-${RALPH_AMP_FLAGS:---dangerously-allow-all}}
 CODEX_GLOBAL_FLAGS=${JARVIS_CODEX_GLOBAL_FLAGS:-${RALPH_CODEX_GLOBAL_FLAGS:---sandbox workspace-write -a never}}
 CODEX_FLAGS=${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:---color never}}
 CODEX_BIN=${JARVIS_CODEX_BIN:-${RALPH_CODEX_BIN:-codex}}
+BRANCH_POLICY_RAW=${JARVIS_BRANCH_POLICY:-${RALPH_BRANCH_POLICY:-prd}}
+MAIN_BRANCH=${JARVIS_MAIN_BRANCH:-${RALPH_MAIN_BRANCH:-main}}
 CLICKUP_STATUS_IN_PROGRESS=${CLICKUP_STATUS_IN_PROGRESS:-in progress}
 CLICKUP_STATUS_TESTING=${CLICKUP_STATUS_TESTING:-testing}
 CLICKUP_STATUS_WAITING=${CLICKUP_STATUS_WAITING:-waiting}
@@ -20,6 +22,7 @@ CLICKUP_AUTH_HEADER=""
 CURRENT_STORY_ID=""
 CURRENT_TASK_ID=""
 APPROVAL_QUEUE_BEFORE_LINES=0
+CODEX_STREAM_FAILURE_STREAK=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -52,6 +55,16 @@ if [ "$MAX_ITERATIONS" -lt 1 ]; then
   echo "Jarvis received max iterations of $MAX_ITERATIONS; nothing to run."
   exit 0
 fi
+
+case "$BRANCH_POLICY_RAW" in
+  prd|main|current)
+    BRANCH_POLICY="$BRANCH_POLICY_RAW"
+    ;;
+  *)
+    echo "Invalid JARVIS_BRANCH_POLICY='$BRANCH_POLICY_RAW' (expected: prd, main, current)" >&2
+    exit 2
+    ;;
+esac
 
 # Ensure runtime is rooted in the target project directory.
 cd "$PROJECT_DIR"
@@ -259,6 +272,102 @@ story_passes() {
 story_note() {
   local story_id="$1"
   jq -r --arg story_id "$story_id" '.userStories[] | select(.id == $story_id) | .notes // ""' "$PRD_FILE" 2>/dev/null | head -n 1
+}
+
+story_title() {
+  local story_id="$1"
+  jq -r --arg story_id "$story_id" '.userStories[] | select(.id == $story_id) | .title // ""' "$PRD_FILE" 2>/dev/null | head -n 1
+}
+
+story_priority() {
+  local story_id="$1"
+  jq -r --arg story_id "$story_id" '.userStories[] | select(.id == $story_id) | .priority // empty' "$PRD_FILE" 2>/dev/null | head -n 1
+}
+
+snapshot_non_target_stories() {
+  local story_id="$1"
+  local output_file="$2"
+
+  jq -c --arg story_id "$story_id" '
+    (.userStories // [])
+    | map(select(.id != $story_id))
+    | map({
+        id: .id,
+        passes: (.passes // false),
+        notes: (.notes // ""),
+        title: (.title // ""),
+        priority: (.priority // null),
+        description: (.description // ""),
+        acceptanceCriteria: (.acceptanceCriteria // [])
+      })
+    | sort_by(.id)
+  ' "$PRD_FILE" > "$output_file"
+}
+
+guard_single_story_scope() {
+  local story_id="$1"
+  local pre_snapshot_file="$2"
+  local post_snapshot_file
+  local changed_ids
+
+  post_snapshot_file="$(mktemp)"
+  snapshot_non_target_stories "$story_id" "$post_snapshot_file"
+
+  if cmp -s "$pre_snapshot_file" "$post_snapshot_file"; then
+    rm -f "$post_snapshot_file" 2>/dev/null || true
+    return 0
+  fi
+
+  changed_ids="$(
+    jq -r --slurpfile before "$pre_snapshot_file" --slurpfile after "$post_snapshot_file" '
+      ($before[0] // []) as $b
+      | ($after[0] // []) as $a
+      | (($b | map({key: .id, value: .}) | from_entries) // {}) as $bm
+      | (($a | map({key: .id, value: .}) | from_entries) // {}) as $am
+      | ((($bm | keys_unsorted) + ($am | keys_unsorted)) | unique) as $ids
+      | $ids[]
+      | select(($bm[.] // null) != ($am[.] // null))
+    ' | paste -sd, -
+  )"
+
+  echo "Jarvis guard failed: iteration pinned to $story_id but non-target story state changed." >&2
+  if [ -n "$changed_ids" ]; then
+    echo "Changed non-target stories: $changed_ids" >&2
+  fi
+  echo "Refusing to continue because only the selected story may be modified in this iteration." >&2
+  rm -f "$post_snapshot_file" 2>/dev/null || true
+  return 1
+}
+
+build_iteration_prompt_file() {
+  local story_id="$1"
+  local story_title_value="$2"
+  local story_priority_value="$3"
+  local output_file="$4"
+
+  cp "$PROMPT_FILE" "$output_file"
+  {
+    echo ""
+    echo "## Iteration Pin (Mandatory)"
+    echo "Implement ONLY story ID: $story_id"
+    echo "Pinned story title: ${story_title_value:-unknown}"
+    echo "Pinned story priority: ${story_priority_value:-unknown}"
+    echo "Do not modify any other story in prd.json (including passes/notes updates)."
+  } >> "$output_file"
+}
+
+cleanup_iteration_temp_files() {
+  local prompt_file="$1"
+  local snapshot_file="$2"
+  local last_message_file="$3"
+  local stream_log_file="$4"
+
+  if [ -n "$prompt_file" ] && [ "$prompt_file" != "$PROMPT_FILE" ]; then
+    rm -f "$prompt_file" 2>/dev/null || true
+  fi
+  [ -n "$snapshot_file" ] && rm -f "$snapshot_file" 2>/dev/null || true
+  [ -n "$last_message_file" ] && rm -f "$last_message_file" 2>/dev/null || true
+  [ -n "$stream_log_file" ] && rm -f "$stream_log_file" 2>/dev/null || true
 }
 
 story_is_blocked() {
@@ -529,6 +638,40 @@ run_clickup_prd_pull_sync() {
   return 0
 }
 
+run_clickup_directives_sync() {
+  local should_sync="${JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START:-${RALPH_CLICKUP_DIRECTIVES_SYNC_ON_START:-0}}"
+  local strict_sync="${JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT:-${RALPH_CLICKUP_DIRECTIVES_SYNC_STRICT:-0}}"
+  local sync_script="$PROJECT_DIR/scripts/clickup/sync_jarvis_directives_to_clickup.sh"
+
+  if [ "$should_sync" = "0" ]; then
+    return 0
+  fi
+
+  if ! has_clickup_config; then
+    echo "Directives sync skipped: set CLICKUP_TOKEN and CLICKUP_LIST_ID/CLICKUP_LIST_URL to enable."
+    return 0
+  fi
+
+  if [ ! -x "$sync_script" ]; then
+    echo "Directives sync skipped: script not found or not executable at $sync_script"
+    return 0
+  fi
+
+  echo "Running Jarvis directives -> ClickUp sync..."
+  if "$sync_script"; then
+    echo "Jarvis directives sync complete."
+    return 0
+  fi
+
+  if [ "$strict_sync" = "1" ]; then
+    echo "Jarvis directives sync failed and strict mode is enabled (JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT=1)." >&2
+    exit 1
+  fi
+
+  echo "Warning: Jarvis directives sync failed; continuing run (set JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT=1 to fail-fast)." >&2
+  return 0
+}
+
 run_project_launcher_sync() {
   local should_sync="${JARVIS_PROJECT_SYNC_ON_START:-${RALPH_PROJECT_SYNC_ON_START:-1}}"
   local strict_sync="${JARVIS_PROJECT_SYNC_STRICT:-${RALPH_PROJECT_SYNC_STRICT:-0}}"
@@ -559,6 +702,115 @@ run_project_launcher_sync() {
   fi
 
   echo "Warning: project launcher sync failed; continuing run (set JARVIS_PROJECT_SYNC_STRICT=1 to fail-fast)." >&2
+  return 0
+}
+
+enforce_branch_policy_once() {
+  local current_branch=""
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [ "$BRANCH_POLICY" != "main" ]; then
+    return 0
+  fi
+
+  current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  if [ "$current_branch" = "$MAIN_BRANCH" ]; then
+    return 0
+  fi
+
+  echo "Branch policy requires direct work on '$MAIN_BRANCH' (current: '${current_branch:-unknown}')."
+  if git switch "$MAIN_BRANCH" >/dev/null 2>&1 || git checkout "$MAIN_BRANCH" >/dev/null 2>&1; then
+    echo "Switched to '$MAIN_BRANCH' per branch policy."
+    return 0
+  fi
+
+  echo "Branch policy failed: unable to switch to '$MAIN_BRANCH'." >&2
+  echo "Recovery: create/restore '$MAIN_BRANCH' locally and rerun, or set JARVIS_BRANCH_POLICY=current for this run." >&2
+  return 1
+}
+
+run_git_preflight() {
+  local enabled="${JARVIS_GIT_PREFLIGHT:-${RALPH_GIT_PREFLIGHT:-1}}"
+  local branch_probe_enabled="${JARVIS_GIT_PREFLIGHT_BRANCH_PROBE:-${RALPH_GIT_PREFLIGHT_BRANCH_PROBE:-}}"
+  local git_dir=""
+  local probe_file=""
+  local temp_branch=""
+  local branch_error=""
+
+  if [ "$enabled" = "0" ]; then
+    return 0
+  fi
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Git preflight failed: project is not a git working tree." >&2
+    return 1
+  fi
+
+  git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
+  if [ -z "$git_dir" ]; then
+    echo "Git preflight failed: unable to resolve .git directory." >&2
+    return 1
+  fi
+
+  probe_file="$git_dir/.jarvis-write-test.$$"
+  if ! : > "$probe_file" 2>/dev/null; then
+    echo "Git preflight failed: cannot write inside $git_dir (index/refs locks will fail)." >&2
+    echo "Recovery: ensure this run has filesystem permissions to write .git/index and .git/refs, then re-run Jarvis." >&2
+    return 1
+  fi
+  rm -f "$probe_file" 2>/dev/null || true
+
+  if [ -z "$branch_probe_enabled" ]; then
+    if [ "$BRANCH_POLICY" = "prd" ]; then
+      branch_probe_enabled=1
+    else
+      branch_probe_enabled=0
+    fi
+  fi
+
+  if [ "$branch_probe_enabled" = "1" ]; then
+    temp_branch="jarvis-preflight-$$-$RANDOM"
+    if ! branch_error="$(git branch --no-track "$temp_branch" 2>&1)"; then
+      echo "Git preflight failed: cannot create branch '$temp_branch'." >&2
+      echo "$branch_error" >&2
+      if echo "$branch_error" | grep -qi "cannot lock ref"; then
+        echo "Recovery: fix ref namespace conflicts under .git/refs/heads, then re-run." >&2
+      else
+        echo "Recovery: verify git write permissions and ref health, then re-run Jarvis." >&2
+      fi
+      return 1
+    fi
+
+    if ! git branch -D "$temp_branch" >/dev/null 2>&1; then
+      echo "Git preflight failed: created temp branch '$temp_branch' but could not delete it." >&2
+      echo "Recovery: delete the temp branch manually ('git branch -D $temp_branch') and check git ref permissions." >&2
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
+codex_stream_disconnect_retryable() {
+  local log_file="$1"
+  local codex_status="$2"
+  local output="$3"
+
+  if [ ! -s "$log_file" ]; then
+    return 1
+  fi
+
+  if ! grep -Eqi "(codex/responses|stream.*disconnect|disconnect.*stream|reconnect|connection.*(closed|lost|reset)|ECONNRESET|EOF while reading)" "$log_file"; then
+    return 1
+  fi
+
+  if [ "$codex_status" -eq 0 ] && [ -n "$(echo "$output" | tr -d '[:space:]')" ]; then
+    return 1
+  fi
+
   return 0
 }
 
@@ -693,7 +945,13 @@ load_project_clickup_env
 run_network_preflight
 run_project_launcher_sync
 run_clickup_prd_pull_sync
+run_clickup_directives_sync
 clickup_prepare_context || true
+
+echo "Branch policy for this run: $BRANCH_POLICY (main branch: $MAIN_BRANCH)"
+if ! enforce_branch_policy_once; then
+  exit 2
+fi
 
 # Archive previous run if branch changed
 if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
@@ -704,7 +962,9 @@ if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
     # Archive the previous run
     DATE=$(date +%Y-%m-%d)
     # Strip "jarvis/" or "ralph/" prefix from branch name for folder
-    FOLDER_NAME=$(echo "$LAST_BRANCH" | sed -E 's|^(jarvis|ralph)/||')
+    FOLDER_NAME="$LAST_BRANCH"
+    FOLDER_NAME="${FOLDER_NAME#jarvis/}"
+    FOLDER_NAME="${FOLDER_NAME#ralph/}"
     ARCHIVE_FOLDER="$ARCHIVE_DIR/$DATE-$FOLDER_NAME"
     
     echo "Archiving previous run: $LAST_BRANCH"
@@ -754,7 +1014,35 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   
   CURRENT_STORY_ID="$(next_unblocked_story_id)"
   CURRENT_TASK_ID=""
+  CURRENT_STORY_TITLE=""
+  CURRENT_STORY_PRIORITY=""
+  ITERATION_PROMPT_FILE="$PROMPT_FILE"
+  PRE_RUN_STORY_SNAPSHOT_FILE=""
+  LAST_MESSAGE_FILE=""
+  STREAM_LOG_FILE=""
   record_approval_queue_lines
+
+  if [ -n "$CURRENT_STORY_ID" ]; then
+    CURRENT_STORY_TITLE="$(story_title "$CURRENT_STORY_ID")"
+    CURRENT_STORY_PRIORITY="$(story_priority "$CURRENT_STORY_ID")"
+    echo "Selected story: $CURRENT_STORY_ID | title: ${CURRENT_STORY_TITLE:-unknown} | priority: ${CURRENT_STORY_PRIORITY:-unknown}"
+
+    PRE_RUN_STORY_SNAPSHOT_FILE="$(mktemp)"
+    snapshot_non_target_stories "$CURRENT_STORY_ID" "$PRE_RUN_STORY_SNAPSHOT_FILE"
+
+    ITERATION_PROMPT_FILE="$(mktemp "${PROJECT_DIR}/.jarvis-iteration-prompt.XXXXXX")"
+    build_iteration_prompt_file "$CURRENT_STORY_ID" "$CURRENT_STORY_TITLE" "$CURRENT_STORY_PRIORITY" "$ITERATION_PROMPT_FILE"
+  else
+    echo "No unblocked story selected; running with base prompt."
+  fi
+
+  if ! run_git_preflight; then
+    echo ""
+    echo "Jarvis aborted before story work due to git preflight failure."
+    echo "No story edits were attempted in this iteration."
+    cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+    exit 2
+  fi
 
   if clickup_is_ready && [ -n "$CURRENT_STORY_ID" ]; then
     CURRENT_TASK_ID="$(clickup_find_task_id_for_story "$CURRENT_STORY_ID" || true)"
@@ -766,24 +1054,43 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   # Run the selected agent with the Jarvis prompt
   if [ "$AGENT" = "codex" ]; then
     LAST_MESSAGE_FILE=$(mktemp "${PROJECT_DIR}/.codex-last-message.XXXXXX")
-    if [ -n "$FOLLOW_LOG" ]; then
-      cat "$PROMPT_FILE" | "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
-    else
-      cat "$PROMPT_FILE" | "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
-    fi
+    STREAM_LOG_FILE=$(mktemp "${PROJECT_DIR}/.codex-stream-log.XXXXXX")
+    set +e
+    cat "$ITERATION_PROMPT_FILE" | "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" "$STREAM_LOG_FILE" >/dev/null
+    CODEX_CMD_STATUS=${PIPESTATUS[1]}
+    set -e
     OUTPUT=$(cat "$LAST_MESSAGE_FILE" 2>/dev/null || true)
-    rm -f "$LAST_MESSAGE_FILE" 2>/dev/null || true
+    if codex_stream_disconnect_retryable "$STREAM_LOG_FILE" "$CODEX_CMD_STATUS" "$OUTPUT"; then
+      CODEX_STREAM_FAILURE_STREAK=$((CODEX_STREAM_FAILURE_STREAK + 1))
+      echo ""
+      echo "Jarvis detected Codex stream disconnect (${CODEX_STREAM_FAILURE_STREAK} consecutive); treating as retryable infrastructure failure."
+      if [ "$CODEX_STREAM_FAILURE_STREAK" -gt 1 ]; then
+        echo "Connectivity remains unstable (codex/responses stream retries). Story state is unchanged; retrying next iteration."
+      fi
+      cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+      sleep 2
+      continue
+    fi
+    CODEX_STREAM_FAILURE_STREAK=0
   elif [ "$AGENT" = "amp" ]; then
     if [ -n "$FOLLOW_LOG" ]; then
       LOG_OFFSET=$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)
-      cat "$PROMPT_FILE" | amp $AMP_FLAGS 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
+      cat "$ITERATION_PROMPT_FILE" | amp $AMP_FLAGS 2>&1 | tee "${TEE_ARGS[@]}" >/dev/null || true
       OUTPUT=$(tail -c +$((LOG_OFFSET+1)) "$LOG_FILE" 2>/dev/null || true)
     else
-      OUTPUT=$(cat "$PROMPT_FILE" | amp $AMP_FLAGS 2>&1 | tee "${TEE_ARGS[@]}") || true
+      OUTPUT=$(cat "$ITERATION_PROMPT_FILE" | amp $AMP_FLAGS 2>&1 | tee "${TEE_ARGS[@]}") || true
     fi
   else
     echo "Unknown JARVIS_AGENT: $AGENT (expected 'amp' or 'codex')" >&2
+    cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     exit 2
+  fi
+
+  if [ -n "$CURRENT_STORY_ID" ] && [ -n "$PRE_RUN_STORY_SNAPSHOT_FILE" ]; then
+    if ! guard_single_story_scope "$CURRENT_STORY_ID" "$PRE_RUN_STORY_SNAPSHOT_FILE"; then
+      cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+      exit 2
+    fi
   fi
   
   # Check for completion signal
@@ -792,6 +1099,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "Jarvis detected a read-only Codex sandbox."
     echo "Project runs require workspace-write inside: $PROJECT_DIR"
     echo "Check project/local env overrides for JARVIS_CODEX_GLOBAL_FLAGS and remove any read-only sandbox setting."
+    cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     exit 2
   fi
 
@@ -799,6 +1107,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo ""
     echo "Jarvis completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
+    cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     exit 0
   fi
 
@@ -818,6 +1127,7 @@ Reason:
     echo ""
     echo "Jarvis marked $CURRENT_STORY_ID as waiting due user-input request and will continue to next iteration."
 
+    cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     sleep 2
     continue
   fi
@@ -842,6 +1152,7 @@ Outcome:
     if [ "$RECOVERED" = "1" ]; then
       echo ""
       echo "Jarvis recovered blocked git commit for $CURRENT_STORY_ID; continuing."
+      cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
       sleep 2
       continue
     fi
@@ -881,6 +1192,7 @@ Reason:
       echo "Jarvis marked $CURRENT_STORY_ID as stuck and will continue to next iteration."
     fi
 
+    cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     sleep 2
     continue
   fi
@@ -892,6 +1204,7 @@ Reason:
   fi
 
   echo "Iteration $i complete. Continuing..."
+  cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
   sleep 2
 done
 

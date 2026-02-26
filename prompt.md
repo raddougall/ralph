@@ -9,13 +9,16 @@ Before starting, check whether a relevant skill exists under `skills/` in this r
 
 1. Read the PRD at `prd.json` (in the same directory as this file)
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
-3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
+3. Respect `JARVIS_BRANCH_POLICY` (legacy `RALPH_BRANCH_POLICY`) before story work:
+   - `main`: work directly on `JARVIS_MAIN_BRANCH` (default `main`); do not create/switch to PRD feature branches.
+   - `current`: stay on the current branch; do not create/switch branches for the story.
+   - `prd` (default): use PRD `branchName`; switch to it or create it from `JARVIS_MAIN_BRANCH` (default `main`) if missing.
 4. Pick the **highest priority** user story where `passes: false` and `notes` does not start with `BLOCKED:`
 5. If ClickUp is configured (see below), find the matching task for the story, move it from `to do` to `in progress`, and post a kickoff activity comment with the implementation plan
 6. Implement that single user story and post ClickUp progress comments at major milestones (plan complete, code complete, tests complete)
 7. Run the full automated quality suite for the changed scope using CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
 8. Update AGENTS.md files if you discover reusable patterns (see below)
-9. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]` (append ` | ClickUp: <task_id>` when task id is known)
+9. If checks pass, commit durable project changes for the story with message: `feat: [Story ID] - [Story Title]` (append ` | ClickUp: <task_id>` when task id is known). Do not force-add ignored/local scratch notes unless explicitly requested.
 10. Update the PRD to set `passes: true` for the completed story
 11. Append your progress to `progress.txt`
 12. If ClickUp is configured, attach commit URL(s), add a final structured activity comment that matches your terminal summary, create/link bug tasks when relevant, then move the story task to `testing`
@@ -45,6 +48,8 @@ Optional env vars:
 - `GITHUB_REPO_URL` (for commit links; if missing, derive from `git remote origin`)
 - `JARVIS_CLICKUP_SYNC_ON_START` (default: `1`, pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` when `scripts/clickup/sync_clickup_to_prd.sh` is available)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default: `0`, set `1` to fail the run if pre-sync fails)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default: `0`, syncs a human-readable Jarvis directives task in ClickUp before iterations when wrapper is available)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default: `0`, set `1` to fail the run if directives sync fails)
 - `JARVIS_APPROVAL_QUEUE_FILE` (default: `./approval-queue.txt`)
 - `JARVIS_PROJECT_SYNC_ON_START` (default: `1`, refresh project-local wrappers/docs/templates from Jarvis master before story work)
 - `JARVIS_PROJECT_SYNC_STRICT` (default: `0`, set `1` to fail the run if project sync fails)
@@ -84,6 +89,7 @@ If ClickUp config is missing, continue normal implementation and explicitly repo
 
 - Pre-existing modified/untracked files in the project are normal for iterative runs. Do not ask the user whether to proceed because the workspace is dirty.
 - When unrelated local changes exist, continue the story; preserve those files and avoid reverting or unintentionally committing unrelated diffs.
+- Leave short-lived local session notes uncommitted by default (especially files matched by `.gitignore`); only commit notes intended as durable project documentation.
 - Do not block waiting for interactive approval prompts. Jarvis runs unattended.
 - Git commands within the active project repo are allowed and should be attempted normally.
 - If a required command cannot run without manual approval (or host-level access), do all of the following:

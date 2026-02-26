@@ -1,0 +1,55 @@
+# Jarvis Directives Overview
+
+This document summarizes the runtime directives Jarvis follows during autonomous iteration runs.
+
+## Core Operating Model
+
+- Jarvis runs iterative agent sessions until stories are complete or max iterations are reached.
+- Each iteration should complete at most one story.
+- State is persisted through `prd.json`, `progress.txt`, and git history.
+
+## Story Selection and Completion
+
+- Pick the highest-priority unblocked story where `passes: false`.
+- Keep blocked stories marked with `BLOCKED:` notes and continue with remaining unblocked work.
+- Mark a story as passing only after implementation and automated checks succeed.
+
+## Branch and Git Policy
+
+- Branch handling is controlled by `JARVIS_BRANCH_POLICY`:
+- `prd`: use PRD `branchName` (legacy/default branch behavior).
+- `main`: work directly on `JARVIS_MAIN_BRANCH`.
+- `current`: stay on the current branch.
+- Git preflight checks run before story work to verify `.git` writeability; failures abort before edits.
+
+## Commit Scope
+
+- Commit durable story artifacts and project changes needed long term.
+- Do not force-add local scratch/session notes by default (especially `.gitignore`d files).
+- Keep unrelated local changes intact; do not revert user work.
+
+## ClickUp Workflow
+
+- When configured, ClickUp updates are required for each story.
+- Use `to do` as the active queue, move to `in progress` at start, then `testing` when ready.
+- Post activity comments at `start`, `progress`, and `testing` using `Jarvis/Codex` labeling.
+- Include implementation notes, exact test commands/outcomes, and changed test file paths.
+
+## Infrastructure and Reliability Guardrails
+
+- Treat repeated Codex stream disconnect loops as retryable infrastructure failures.
+- Keep project edits scoped to `JARVIS_PROJECT_DIR`.
+- Avoid host system package-manager changes unless explicitly approved.
+- Queue approval-gated commands in `approval-queue.txt` and keep iterating unblocked work.
+
+## Testing and Quality
+
+- Run CI-ready automated checks for changed behavior before committing.
+- For UI changes, include browser verification plus automated UI coverage where feasible.
+- Keep changes focused and aligned with existing project conventions.
+
+## Documentation and Learning Loop
+
+- Append iteration summaries and learnings to `progress.txt`.
+- Promote reusable patterns into `AGENTS.md` for future iterations.
+- Keep this overview human-readable and aligned with current Jarvis directives.

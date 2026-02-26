@@ -187,6 +187,10 @@ Project scoping controls:
 - `JARVIS_NETWORK_PREFLIGHT_TIMEOUT_SECONDS` (default: `8`, per-host timeout)
 - `JARVIS_OPENAI_PREFLIGHT_URL` (default: `https://chatgpt.com`, endpoint used to validate OpenAI reachability for Codex runs)
 - `JARVIS_NETWORK_PREFLIGHT_HOSTS` (optional comma-separated extra hosts to validate)
+- `JARVIS_BRANCH_POLICY` (default: `prd`; `main` = work directly on `JARVIS_MAIN_BRANCH`, `current` = stay on current branch, `prd` = use PRD `branchName`)
+- `JARVIS_MAIN_BRANCH` (default: `main`; used by `JARVIS_BRANCH_POLICY=main` and as PRD branch creation base)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default: `0`; when enabled, updates a ClickUp task with a human-readable Jarvis directives overview at run start)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default: `0`; set `1` to fail-fast if directives sync fails)
 - If `JARVIS_PROMPT_FILE` is unset and `<project>/.jarvis/prompt.md` exists, Jarvis uses that project-local prompt override. Legacy `.ralph/prompt.md` is still supported.
 
 Manual project sync command:
@@ -203,7 +207,10 @@ Safety defaults:
 - Localhost smoke testing is allowed, but any temporary local servers must be stopped before the run completes.
 
 Jarvis will:
-1. Create a feature branch (from PRD `branchName`)
+1. Apply branch policy:
+   - `prd` (default): use/create PRD `branchName` from `JARVIS_MAIN_BRANCH`
+   - `main`: work directly on `JARVIS_MAIN_BRANCH`
+   - `current`: stay on current branch without switching/creating
 2. Pick the highest priority unblocked story where `passes: false` and `notes` does not start with `BLOCKED:`
 3. If ClickUp is configured, move the matching `[US-xxx]` task from `to do` to `in progress` and post a kickoff plan comment
 4. Implement that single story
@@ -240,8 +247,12 @@ Optional:
 - `CLICKUP_COMMENT_AUTHOR_LABEL` (default `Jarvis/Codex`)
 - `JARVIS_CLICKUP_SYNC_ON_START` (default `1`: run `scripts/clickup/sync_clickup_to_prd.sh` before iterations)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default `0`: set `1` to fail fast if pre-sync fails)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default `0`: run `scripts/clickup/sync_jarvis_directives_to_clickup.sh` before iterations)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default `0`: set `1` to fail fast if directives sync fails)
 - `JARVIS_APPROVAL_QUEUE_FILE` (default `./approval-queue.txt`)
 - `GITHUB_REPO_URL` (used for commit URL links on tasks)
+- `CLICKUP_DIRECTIVES_TASK_ID` or `CLICKUP_DIRECTIVES_TASK_NAME` (target task for directives overview sync)
+- `CLICKUP_DIRECTIVES_SOURCE_FILE` (optional source markdown path for directives overview)
 
 This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
 
@@ -258,7 +269,7 @@ This keeps local `prd.json` aligned with ClickUp before each run, while still pr
 | `skills/ralph/` | Legacy skill name for converting PRDs to JSON |
 | `.claude-plugin/` | Plugin manifests for Claude Code marketplace discovery |
 | `flowchart/` | Interactive visualization of how Jarvis works |
-| `scripts/clickup/` | Shared ClickUp OAuth + PRD sync scripts used by project wrappers |
+| `scripts/clickup/` | Shared ClickUp OAuth + PRD/directives sync scripts used by project wrappers |
 
 ## Flowchart
 
@@ -347,7 +358,7 @@ Edit `prompt.md` to customize Jarvis's behavior for your project:
 
 ## Archiving
 
-Jarvis automatically archives previous runs when you start a new feature (different `branchName`). Archives are saved to `archive/YYYY-MM-DD-feature-name/`.
+When using PRD branch mode, Jarvis automatically archives previous runs when you start a new feature (different `branchName`). Archives are saved to `archive/YYYY-MM-DD-feature-name/`.
 
 ## References
 

@@ -2,7 +2,7 @@
 
 This folder contains shared helper scripts to keep ClickUp story tasks and local `prd.json` in sync.
 
-Recommended usage: run the project-local wrappers created by `scripts/install-project-launcher.sh` (for example `./scripts/clickup/sync_clickup_to_prd.sh` and `./scripts/clickup/sync_prd_to_clickup.sh` from your project root).
+Recommended usage: run the project-local wrappers created by `scripts/install-project-launcher.sh` (for example `./scripts/clickup/sync_clickup_to_prd.sh`, `./scripts/clickup/sync_prd_to_clickup.sh`, and `./scripts/clickup/sync_jarvis_directives_to_clickup.sh` from your project root).
 
 ## 1) Get an OAuth access token (if you are using OAuth app credentials)
 
@@ -122,6 +122,23 @@ For traceability:
 - link related tasks (for example bug task linked to originating story task)
 - use ClickUp task type `bug` for bug reports/fixes, not generic story/task type
 - keep final ClickUp completion note aligned with the same implementation/test summary shared in terminal output
+
+## 4) Sync Jarvis directives overview into ClickUp
+
+Use this to maintain a human-readable directives reference task in your ClickUp list.
+
+```bash
+CLICKUP_TOKEN=... \
+CLICKUP_LIST_ID=456 \
+./scripts/clickup/sync_jarvis_directives_to_clickup.sh
+```
+
+Optional variables:
+
+- `CLICKUP_DIRECTIVES_TASK_ID` (preferred for stable updates)
+- `CLICKUP_DIRECTIVES_TASK_NAME` (default: `[JARVIS-DIRECTIVES] Jarvis Runtime Directives`)
+- `CLICKUP_DIRECTIVES_SOURCE_FILE` (default: `./docs/jarvis-directives-overview.md`, fallback to Jarvis master docs file)
+- `CLICKUP_DIRECTIVES_POST_COMMENT` (default: `1`)
 
 ## Dry-run
 
