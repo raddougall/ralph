@@ -639,9 +639,12 @@ run_clickup_prd_pull_sync() {
 }
 
 run_clickup_directives_sync() {
+  local sync_reason="${1:-manual}"
   local should_sync="${JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START:-${RALPH_CLICKUP_DIRECTIVES_SYNC_ON_START:-0}}"
   local strict_sync="${JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT:-${RALPH_CLICKUP_DIRECTIVES_SYNC_STRICT:-0}}"
+  local branch_policy="${JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY:-${RALPH_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY:-main_only}}"
   local sync_script="$PROJECT_DIR/scripts/clickup/sync_jarvis_directives_to_clickup.sh"
+  local current_branch=""
 
   if [ "$should_sync" = "0" ]; then
     return 0
@@ -657,7 +660,16 @@ run_clickup_directives_sync() {
     return 0
   fi
 
-  echo "Running Jarvis directives -> ClickUp sync..."
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  fi
+
+  if [ "$branch_policy" = "main_only" ] && [ -n "$current_branch" ] && [ "$current_branch" != "$MAIN_BRANCH" ]; then
+    echo "Directives sync skipped on branch '$current_branch' (policy: main_only, main: '$MAIN_BRANCH')."
+    return 0
+  fi
+
+  echo "Running Jarvis directives -> ClickUp sync ($sync_reason)..."
   if "$sync_script"; then
     echo "Jarvis directives sync complete."
     return 0
@@ -945,7 +957,7 @@ load_project_clickup_env
 run_network_preflight
 run_project_launcher_sync
 run_clickup_prd_pull_sync
-run_clickup_directives_sync
+run_clickup_directives_sync "run-start"
 clickup_prepare_context || true
 
 echo "Branch policy for this run: $BRANCH_POLICY (main branch: $MAIN_BRANCH)"
@@ -1021,6 +1033,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   LAST_MESSAGE_FILE=""
   STREAM_LOG_FILE=""
   record_approval_queue_lines
+  ITERATION_HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || true)"
 
   if [ -n "$CURRENT_STORY_ID" ]; then
     CURRENT_STORY_TITLE="$(story_title "$CURRENT_STORY_ID")"
@@ -1092,6 +1105,11 @@ for i in $(seq 1 $MAX_ITERATIONS); do
       exit 2
     fi
   fi
+
+  ITERATION_HEAD_AFTER="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [ -n "$ITERATION_HEAD_BEFORE" ] && [ -n "$ITERATION_HEAD_AFTER" ] && [ "$ITERATION_HEAD_BEFORE" != "$ITERATION_HEAD_AFTER" ]; then
+    run_clickup_directives_sync "post-commit"
+  fi
   
   # Check for completion signal
   if echo "$OUTPUT" | grep -q "sandbox: read-only"; then
@@ -1150,6 +1168,7 @@ Outcome:
     fi
 
     if [ "$RECOVERED" = "1" ]; then
+      run_clickup_directives_sync "post-recovery-commit"
       echo ""
       echo "Jarvis recovered blocked git commit for $CURRENT_STORY_ID; continuing."
       cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"

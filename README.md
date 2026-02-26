@@ -189,8 +189,9 @@ Project scoping controls:
 - `JARVIS_NETWORK_PREFLIGHT_HOSTS` (optional comma-separated extra hosts to validate)
 - `JARVIS_BRANCH_POLICY` (default: `prd`; `main` = work directly on `JARVIS_MAIN_BRANCH`, `current` = stay on current branch, `prd` = use PRD `branchName`)
 - `JARVIS_MAIN_BRANCH` (default: `main`; used by `JARVIS_BRANCH_POLICY=main` and as PRD branch creation base)
-- `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default: `0`; when enabled, updates a ClickUp task with a human-readable Jarvis directives overview at run start)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default: `0`; when enabled, updates a ClickUp Doc with a human-readable Jarvis directives overview at run start)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default: `0`; set `1` to fail-fast if directives sync fails)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY` (default: `main_only`; keep docs clean by syncing only on `JARVIS_MAIN_BRANCH`)
 - If `JARVIS_PROMPT_FILE` is unset and `<project>/.jarvis/prompt.md` exists, Jarvis uses that project-local prompt override. Legacy `.ralph/prompt.md` is still supported.
 
 Manual project sync command:
@@ -249,9 +250,12 @@ Optional:
 - `JARVIS_CLICKUP_SYNC_STRICT` (default `0`: set `1` to fail fast if pre-sync fails)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default `0`: run `scripts/clickup/sync_jarvis_directives_to_clickup.sh` before iterations)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default `0`: set `1` to fail fast if directives sync fails)
+- `JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY` (default `main_only`: skip directives sync on feature branches)
 - `JARVIS_APPROVAL_QUEUE_FILE` (default `./approval-queue.txt`)
 - `GITHUB_REPO_URL` (used for commit URL links on tasks)
-- `CLICKUP_DIRECTIVES_TASK_ID` or `CLICKUP_DIRECTIVES_TASK_NAME` (target task for directives overview sync)
+- `CLICKUP_DIRECTIVES_DOC_URL` (target ClickUp Doc URL such as `https://app.clickup.com/<workspace>/v/dc/<doc_id>`)
+- `CLICKUP_WORKSPACE_ID` + `CLICKUP_DIRECTIVES_DOC_ID` (alternate target configuration)
+- `CLICKUP_DIRECTIVES_PAGE_ID` (optional explicit doc page id)
 - `CLICKUP_DIRECTIVES_SOURCE_FILE` (optional source markdown path for directives overview)
 
 This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.

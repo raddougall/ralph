@@ -61,6 +61,7 @@ npm run dev
 - Every project must maximize automated testing for changed behavior and keep CI-ready, non-interactive test scripts/commands up to date.
 - Always update AGENTS.md with discovered patterns for future iterations
 - If ClickUp credentials are configured and `scripts/clickup/sync_clickup_to_prd.sh` exists, Jarvis pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` at run start (default enabled).
-- Optionally sync a human-readable directives reference task in ClickUp at run start via `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START=1` using `scripts/clickup/sync_jarvis_directives_to_clickup.sh`.
+- Optionally sync a human-readable directives reference doc in ClickUp at run start via `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START=1` using `scripts/clickup/sync_jarvis_directives_to_clickup.sh`.
+- Directives doc sync should target project-specific ClickUp Doc URLs and follow clean-state policy: sync on `main` commits, skip feature branches until merged.
 - If ClickUp credentials are configured, every story must use `to do` as the ready queue (`backlog` is ideas only), move status `in progress` -> `testing`, and post live task comments at `start`, `progress`, and `testing` phases with a `Jarvis/Codex` label; include commit linkage plus activity notes (implementation details, test commands/outcomes, test file paths, smoke result), keep ClickUp note content consistent with terminal summaries, link related tasks for traceability, and use ClickUp task type `bug` for bug work linked back to the originating story.
 - Approval-gated commands should be queued in `approval-queue.txt`, blocked stories marked with `BLOCKED:` in `prd.json` notes, and iterations should continue with remaining unblocked stories.

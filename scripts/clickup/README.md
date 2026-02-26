@@ -125,7 +125,7 @@ For traceability:
 
 ## 4) Sync Jarvis directives overview into ClickUp
 
-Use this to maintain a human-readable directives reference task in your ClickUp list.
+Use this to maintain a human-readable directives reference doc in ClickUp.
 
 ```bash
 CLICKUP_TOKEN=... \
@@ -135,10 +135,10 @@ CLICKUP_LIST_ID=456 \
 
 Optional variables:
 
-- `CLICKUP_DIRECTIVES_TASK_ID` (preferred for stable updates)
-- `CLICKUP_DIRECTIVES_TASK_NAME` (default: `[JARVIS-DIRECTIVES] Jarvis Runtime Directives`)
+- `CLICKUP_DIRECTIVES_DOC_URL` (recommended; parse workspace/doc id automatically)
+- or `CLICKUP_WORKSPACE_ID` + `CLICKUP_DIRECTIVES_DOC_ID`
+- `CLICKUP_DIRECTIVES_PAGE_ID` (optional; auto-selects first page if omitted)
 - `CLICKUP_DIRECTIVES_SOURCE_FILE` (default: `./docs/jarvis-directives-overview.md`, fallback to Jarvis master docs file)
-- `CLICKUP_DIRECTIVES_POST_COMMENT` (default: `1`)
 
 ## Dry-run
 
