@@ -189,6 +189,7 @@ Project scoping controls:
 - `JARVIS_NETWORK_PREFLIGHT_HOSTS` (optional comma-separated extra hosts to validate)
 - `JARVIS_BRANCH_POLICY` (default: `prd`; `main` = work directly on `JARVIS_MAIN_BRANCH`, `current` = stay on current branch, `prd` = use PRD `branchName`)
 - `JARVIS_MAIN_BRANCH` (default: `main`; used by `JARVIS_BRANCH_POLICY=main` and as PRD branch creation base)
+- `JARVIS_CODEX_SANDBOX_EXPECTED` (optional: `workspace-write` or `danger-full-access`; when set, Jarvis fails fast if effective `JARVIS_CODEX_GLOBAL_FLAGS` sandbox does not match)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default: `0`; when enabled, updates a ClickUp Doc with a human-readable Jarvis directives overview at run start)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default: `0`; set `1` to fail-fast if directives sync fails)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY` (default: `main_only`; keep docs clean by syncing only on `JARVIS_MAIN_BRANCH`)

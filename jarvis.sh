@@ -26,6 +26,7 @@ CURRENT_STORY_PRIORITY=""
 APPROVAL_QUEUE_BEFORE_LINES=0
 CODEX_STREAM_FAILURE_STREAK=0
 ERROR_FEEDBACK_ENABLED=${JARVIS_ERROR_FEEDBACK_ENABLED:-${RALPH_ERROR_FEEDBACK_ENABLED:-1}}
+CODEX_SANDBOX_EXPECTED="${JARVIS_CODEX_SANDBOX_EXPECTED:-${RALPH_CODEX_SANDBOX_EXPECTED:-}}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -771,6 +772,70 @@ run_clickup_directives_sync() {
   return 0
 }
 
+normalize_sandbox_expectation() {
+  local raw="$1"
+  local normalized
+  normalized="$(echo "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$normalized" in
+    ""|workspace-write|workspace_write|danger-full-access|danger_full_access)
+      echo "$normalized"
+      return 0
+      ;;
+    *)
+      echo "invalid"
+      return 1
+      ;;
+  esac
+}
+
+current_codex_sandbox_mode() {
+  if echo " $CODEX_GLOBAL_FLAGS " | grep -q -- " --sandbox danger-full-access "; then
+    echo "danger-full-access"
+    return
+  fi
+  if echo " $CODEX_GLOBAL_FLAGS " | grep -q -- " --sandbox workspace-write "; then
+    echo "workspace-write"
+    return
+  fi
+  echo "unknown"
+}
+
+enforce_codex_sandbox_expectation() {
+  local normalized_expected
+  local current_mode
+  local expected_mode
+
+  if [ "$AGENT" != "codex" ]; then
+    return 0
+  fi
+
+  normalized_expected="$(normalize_sandbox_expectation "$CODEX_SANDBOX_EXPECTED" || true)"
+  if [ "$normalized_expected" = "invalid" ]; then
+    echo "Invalid JARVIS_CODEX_SANDBOX_EXPECTED='$CODEX_SANDBOX_EXPECTED' (expected: workspace-write or danger-full-access)." >&2
+    return 1
+  fi
+
+  if [ -z "$normalized_expected" ]; then
+    return 0
+  fi
+
+  case "$normalized_expected" in
+    workspace_write) expected_mode="workspace-write" ;;
+    danger_full_access) expected_mode="danger-full-access" ;;
+    *) expected_mode="$normalized_expected" ;;
+  esac
+
+  current_mode="$(current_codex_sandbox_mode)"
+  if [ "$current_mode" != "$expected_mode" ]; then
+    echo "Codex sandbox expectation failed: expected '$expected_mode' but effective global flags resolve to '$current_mode'." >&2
+    echo "Current CODEX_GLOBAL_FLAGS: $CODEX_GLOBAL_FLAGS" >&2
+    echo "Fix: update scripts/jarvis/.env.jarvis.local or launcher env so nested Codex uses the intended sandbox." >&2
+    return 1
+  fi
+
+  return 0
+}
+
 run_project_launcher_sync() {
   local should_sync="${JARVIS_PROJECT_SYNC_ON_START:-${RALPH_PROJECT_SYNC_ON_START:-1}}"
   local strict_sync="${JARVIS_PROJECT_SYNC_STRICT:-${RALPH_PROJECT_SYNC_STRICT:-0}}"
@@ -1143,6 +1208,15 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     report_runtime_error_feedback "preflight" "git_preflight_failed" "error" "Git preflight failed before story execution."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     exit 2
+  fi
+
+  if [ "$AGENT" = "codex" ]; then
+    echo "Codex flags (iteration $i): global='$CODEX_GLOBAL_FLAGS' exec='$CODEX_FLAGS'"
+    if ! enforce_codex_sandbox_expectation; then
+      report_runtime_error_feedback "preflight" "codex_sandbox_expectation_failed" "error" "Configured expected sandbox does not match effective CODEX_GLOBAL_FLAGS."
+      cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+      exit 2
+    fi
   fi
 
   if clickup_is_ready && [ -n "$CURRENT_STORY_ID" ]; then
