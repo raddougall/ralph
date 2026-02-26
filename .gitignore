@@ -13,3 +13,5 @@ ralph.log
 
 #Claude
 .claude/
+
+scripts/clickup/.env.clickup
