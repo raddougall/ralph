@@ -257,6 +257,7 @@ Optional:
 - `CLICKUP_WORKSPACE_ID` + `CLICKUP_DIRECTIVES_DOC_ID` (alternate target configuration)
 - `CLICKUP_DIRECTIVES_PAGE_ID` (optional explicit doc page id)
 - `CLICKUP_DIRECTIVES_SOURCE_FILE` (optional source markdown path for directives overview)
+- Per-project doc targeting lives in `scripts/clickup/.env.clickup` (keep each project’s `CLICKUP_DIRECTIVES_DOC_URL` different as needed)
 - Per-story override in `prd.json`: `clickupStatus` (if set, this status is used when pushing PRD -> ClickUp before fallback to `passes` mapping)
 
 This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.

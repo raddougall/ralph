@@ -42,6 +42,24 @@ This document summarizes the runtime directives Jarvis follows during autonomous
 - Avoid host system package-manager changes unless explicitly approved.
 - Queue approval-gated commands in `approval-queue.txt` and keep iterating unblocked work.
 
+## Runtime Access and Sandbox Modes
+
+- Default unattended Codex mode is workspace-write with no interactive approvals:
+- `JARVIS_CODEX_GLOBAL_FLAGS="--sandbox workspace-write -a never"`
+- Default Codex exec flags:
+- `JARVIS_CODEX_FLAGS="--color never"`
+- If `JARVIS_CODEX_ENABLE_NETWORK=1` and workspace-write sandbox is used, Jarvis enables workspace network access for Codex runs.
+- `danger-full-access` is optional and should be used only when explicitly intended for broader host/system access.
+- For project runs, writable access inside `JARVIS_PROJECT_DIR` is required for normal behavior (`git`, edits, tests, artifacts).
+- Read-only behavior is intended for paths outside the active project root, not for the project itself.
+
+## Branch-Aware Protocol Doc Sync
+
+- Jarvis can sync this directives overview to a project-specific ClickUp Doc.
+- Doc target is configured per project in `scripts/clickup/.env.clickup` via `CLICKUP_DIRECTIVES_DOC_URL`.
+- Recommended clean-state policy is `JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY=main_only`:
+- sync on `main` commits (and run start on main), skip feature branches until merge.
+
 ## Testing and Quality
 
 - Run CI-ready automated checks for changed behavior before committing.

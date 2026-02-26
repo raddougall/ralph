@@ -140,6 +140,11 @@ Optional variables:
 - `CLICKUP_DIRECTIVES_PAGE_ID` (optional; auto-selects first page if omitted)
 - `CLICKUP_DIRECTIVES_SOURCE_FILE` (default: `./docs/jarvis-directives-overview.md`, fallback to Jarvis master docs file)
 
+Per-project setup note:
+
+- Put the target doc URL in that project’s `scripts/clickup/.env.clickup`.
+- Different projects can point to different docs by setting different `CLICKUP_DIRECTIVES_DOC_URL` values.
+
 ## Dry-run
 
 ```bash
