@@ -113,6 +113,31 @@ exec "$MASTER_INSTALLER" "$PROJECT_ROOT"
 SYNC_WITH_MASTER
 chmod +x "$TARGET_JARVIS_DIR/sync-with-master.sh"
 
+cat > "$TARGET_JARVIS_DIR/house-party-protocol.sh" <<'HOUSE_PARTY'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Marvel-inspired "full access" preset for unattended Codex runs.
+export JARVIS_AGENT=codex
+export RALPH_AGENT=codex
+export JARVIS_CODEX_ENABLE_NETWORK=1
+export RALPH_CODEX_ENABLE_NETWORK=1
+export JARVIS_CODEX_GLOBAL_FLAGS="--sandbox danger-full-access -a never"
+export RALPH_CODEX_GLOBAL_FLAGS="$JARVIS_CODEX_GLOBAL_FLAGS"
+export JARVIS_CODEX_SANDBOX_EXPECTED="danger-full-access"
+export RALPH_CODEX_SANDBOX_EXPECTED="$JARVIS_CODEX_SANDBOX_EXPECTED"
+
+if [[ -z "${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:-}}" ]]; then
+  export JARVIS_CODEX_FLAGS="--color never"
+  export RALPH_CODEX_FLAGS="$JARVIS_CODEX_FLAGS"
+fi
+
+exec "$SCRIPT_DIR/jarvis.sh" "$@"
+HOUSE_PARTY
+chmod +x "$TARGET_JARVIS_DIR/house-party-protocol.sh"
+
 cat > "$TARGET_RALPH_DIR/ralph.sh" <<'RALPH_SHIM'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -128,6 +153,7 @@ cat > "$TARGET_JARVIS_DIR/README.md" <<'DOC'
 This project uses the shared master Jarvis runtime.
 
 - Primary launcher: `scripts/jarvis/jarvis.sh`
+- Full-access launcher: `scripts/jarvis/house-party-protocol.sh`
 - Legacy compatibility launcher: `scripts/ralph/ralph.sh`
 - Manual sync helper: `scripts/jarvis/sync-with-master.sh`
 - Default shared runtime path: `$HOME/CodeDev/Jarvis` (fallback `$HOME/CodeDev/Ralph`)
@@ -159,6 +185,10 @@ cp scripts/jarvis/.env.jarvis.example scripts/jarvis/.env.jarvis.local
 
 ```bash
 JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh
+```
+
+```bash
+./scripts/jarvis/house-party-protocol.sh [max_iterations]
 ```
 
 Legacy equivalent (still works):

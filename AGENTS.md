@@ -54,6 +54,7 @@ npm run dev
 - Jarvis pins each iteration to the selected story ID, logs story id/title/priority before launch, and audits non-target `prd.json` story mutations with end-of-run summary output for manual review.
 - Story scheduling should treat planning markers as non-executable (`planning: true`, `skip: true`, or `clickupStatus: "planning"`), and ClickUp sync should honor per-story `clickupStatus` before `passes` mapping.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
+- Projects synced with the launcher include a `scripts/jarvis/house-party-protocol.sh` preset for Codex full-access runs (`danger-full-access`, network enabled, `-a never`).
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.
 - Project iterations must run with writable access inside `JARVIS_PROJECT_DIR`; read-only intent applies to paths outside the active project root, not the project itself.
 - Jarvis auto-syncs project-local wrappers/docs/templates from master at run start by default (`JARVIS_PROJECT_SYNC_ON_START=1`), and this sync must not overwrite existing project secret values.

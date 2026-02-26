@@ -132,6 +132,9 @@ If you're using Codex, you can generate the PRD manually or with your preferred 
 
 # Codex
 JARVIS_AGENT=codex ./scripts/jarvis/jarvis.sh [max_iterations]
+
+# Codex "House Party Protocol" (full-access preset)
+./scripts/jarvis/house-party-protocol.sh [max_iterations]
 ```
 
 Legacy compatibility command still works:
