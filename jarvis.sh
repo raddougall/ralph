@@ -21,8 +21,11 @@ CLICKUP_LIST_ID_RESOLVED=""
 CLICKUP_AUTH_HEADER=""
 CURRENT_STORY_ID=""
 CURRENT_TASK_ID=""
+CURRENT_STORY_TITLE=""
+CURRENT_STORY_PRIORITY=""
 APPROVAL_QUEUE_BEFORE_LINES=0
 CODEX_STREAM_FAILURE_STREAK=0
+ERROR_FEEDBACK_ENABLED=${JARVIS_ERROR_FEEDBACK_ENABLED:-${RALPH_ERROR_FEEDBACK_ENABLED:-1}}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -258,7 +261,15 @@ clickup_find_task_id_for_story() {
 next_unblocked_story_id() {
   jq -r '
     (.userStories // [])
-    | map(select((.passes == false) and (((.notes // "") | startswith("BLOCKED:")) | not)))
+    | map(
+        select(
+          (.passes == false)
+          and (((.notes // "") | startswith("BLOCKED:")) | not)
+          and ((.planning // false) != true)
+          and ((.skip // false) != true)
+          and (((.clickupStatus // "") | ascii_downcase) != "planning")
+        )
+      )
     | sort_by(.priority // 999999)
     | .[0].id // empty
   ' "$PRD_FILE"
@@ -368,6 +379,82 @@ cleanup_iteration_temp_files() {
   [ -n "$snapshot_file" ] && rm -f "$snapshot_file" 2>/dev/null || true
   [ -n "$last_message_file" ] && rm -f "$last_message_file" 2>/dev/null || true
   [ -n "$stream_log_file" ] && rm -f "$stream_log_file" 2>/dev/null || true
+}
+
+report_runtime_error_feedback() {
+  local phase="$1"
+  local reason="$2"
+  local severity="${3:-error}"
+  local details="${4:-}"
+  local feedback_dir="${JARVIS_ERROR_FEEDBACK_DIR:-${RALPH_ERROR_FEEDBACK_DIR:-$SCRIPT_DIR/runtime-feedback}}"
+  local feedback_file="$feedback_dir/error-events.jsonl"
+  local local_feedback_file="$PROJECT_DIR/.jarvis/error-events.jsonl"
+  local current_branch=""
+  local output_excerpt=""
+  local event_json=""
+  local wrote_any=0
+
+  if [ "$ERROR_FEEDBACK_ENABLED" = "0" ]; then
+    return 0
+  fi
+
+  current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+  output_excerpt="$(printf '%s' "${OUTPUT:-}" | tail -n 60)"
+  if [ ${#output_excerpt} -gt 4000 ]; then
+    output_excerpt="${output_excerpt:0:4000}"
+  fi
+
+  event_json="$(jq -nc \
+    --arg timestamp "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    --arg project_dir "$PROJECT_DIR" \
+    --arg project_name "$(basename "$PROJECT_DIR")" \
+    --arg phase "$phase" \
+    --arg severity "$severity" \
+    --arg reason "$reason" \
+    --arg details "$details" \
+    --arg branch "$current_branch" \
+    --arg story_id "${CURRENT_STORY_ID:-}" \
+    --arg story_title "${CURRENT_STORY_TITLE:-}" \
+    --arg story_priority "${CURRENT_STORY_PRIORITY:-}" \
+    --arg iteration "${i:-}" \
+    --arg agent "$AGENT" \
+    --arg output_excerpt "$output_excerpt" \
+    '{
+      timestamp: $timestamp,
+      project: {
+        name: $project_name,
+        dir: $project_dir,
+        branch: $branch
+      },
+      phase: $phase,
+      severity: $severity,
+      reason: $reason,
+      details: $details,
+      story: {
+        id: $story_id,
+        title: $story_title,
+        priority: $story_priority
+      },
+      iteration: $iteration,
+      agent: $agent,
+      output_excerpt: $output_excerpt
+    }')"
+
+  mkdir -p "$(dirname "$local_feedback_file")" 2>/dev/null || true
+  if printf '%s\n' "$event_json" >> "$local_feedback_file" 2>/dev/null; then
+    wrote_any=1
+  fi
+
+  mkdir -p "$feedback_dir" 2>/dev/null || true
+  if printf '%s\n' "$event_json" >> "$feedback_file" 2>/dev/null; then
+    wrote_any=1
+  fi
+
+  if [ "$wrote_any" = "1" ]; then
+    echo "Jarvis error feedback captured: $reason"
+  else
+    echo "Warning: unable to write Jarvis error feedback logs." >&2
+  fi
 }
 
 story_is_blocked() {
@@ -1053,6 +1140,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo ""
     echo "Jarvis aborted before story work due to git preflight failure."
     echo "No story edits were attempted in this iteration."
+    report_runtime_error_feedback "preflight" "git_preflight_failed" "error" "Git preflight failed before story execution."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     exit 2
   fi
@@ -1095,12 +1183,14 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     fi
   else
     echo "Unknown JARVIS_AGENT: $AGENT (expected 'amp' or 'codex')" >&2
+    report_runtime_error_feedback "launch" "unknown_agent" "error" "Unsupported JARVIS_AGENT value."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     exit 2
   fi
 
   if [ -n "$CURRENT_STORY_ID" ] && [ -n "$PRE_RUN_STORY_SNAPSHOT_FILE" ]; then
     if ! guard_single_story_scope "$CURRENT_STORY_ID" "$PRE_RUN_STORY_SNAPSHOT_FILE"; then
+      report_runtime_error_feedback "guard" "single_story_scope_violation" "error" "Detected non-target story changes during pinned iteration."
       cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
       exit 2
     fi
@@ -1117,6 +1207,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "Jarvis detected a read-only Codex sandbox."
     echo "Project runs require workspace-write inside: $PROJECT_DIR"
     echo "Check project/local env overrides for JARVIS_CODEX_GLOBAL_FLAGS and remove any read-only sandbox setting."
+    report_runtime_error_feedback "agent-run" "read_only_sandbox_detected" "error" "Codex reported read-only sandbox during project iteration."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     exit 2
   fi
@@ -1209,6 +1300,7 @@ Reason:
       echo "Jarvis marked $CURRENT_STORY_ID as waiting and will continue to next iteration."
     else
       echo "Jarvis marked $CURRENT_STORY_ID as stuck and will continue to next iteration."
+      report_runtime_error_feedback "story" "story_marked_stuck" "error" "Story marked stuck due to runtime blocker."
     fi
 
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
@@ -1230,4 +1322,5 @@ done
 echo ""
 echo "Jarvis reached max iterations ($MAX_ITERATIONS) without completing all tasks."
 echo "Check $PROGRESS_FILE for status."
+report_runtime_error_feedback "run" "max_iterations_reached" "warning" "Run ended without completion."
 exit 1

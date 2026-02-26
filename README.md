@@ -212,7 +212,7 @@ Jarvis will:
    - `prd` (default): use/create PRD `branchName` from `JARVIS_MAIN_BRANCH`
    - `main`: work directly on `JARVIS_MAIN_BRANCH`
    - `current`: stay on current branch without switching/creating
-2. Pick the highest priority unblocked story where `passes: false` and `notes` does not start with `BLOCKED:`
+2. Pick the highest priority executable unblocked story where `passes: false`, `notes` does not start with `BLOCKED:`, and the story is not planning/skip (`planning: true`, `skip: true`, or `clickupStatus: "planning"`).
 3. If ClickUp is configured, move the matching `[US-xxx]` task from `to do` to `in progress` and post a kickoff plan comment
 4. Implement that single story
 5. Run the automated quality suite via CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
@@ -257,6 +257,7 @@ Optional:
 - `CLICKUP_WORKSPACE_ID` + `CLICKUP_DIRECTIVES_DOC_ID` (alternate target configuration)
 - `CLICKUP_DIRECTIVES_PAGE_ID` (optional explicit doc page id)
 - `CLICKUP_DIRECTIVES_SOURCE_FILE` (optional source markdown path for directives overview)
+- Per-story override in `prd.json`: `clickupStatus` (if set, this status is used when pushing PRD -> ClickUp before fallback to `passes` mapping)
 
 This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
 
@@ -274,6 +275,7 @@ This keeps local `prd.json` aligned with ClickUp before each run, while still pr
 | `.claude-plugin/` | Plugin manifests for Claude Code marketplace discovery |
 | `flowchart/` | Interactive visualization of how Jarvis works |
 | `scripts/clickup/` | Shared ClickUp OAuth + PRD/directives sync scripts used by project wrappers |
+| `scripts/jarvis/list_runtime_errors.sh` | Summarize aggregated runtime failures reported by project runs |
 
 ## Flowchart
 
@@ -363,6 +365,19 @@ Edit `prompt.md` to customize Jarvis's behavior for your project:
 ## Archiving
 
 When using PRD branch mode, Jarvis automatically archives previous runs when you start a new feature (different `branchName`). Archives are saved to `archive/YYYY-MM-DD-feature-name/`.
+
+## Runtime Error Feedback
+
+Jarvis now captures runtime failures from project runs automatically:
+
+- project-local feed: `<project>/.jarvis/error-events.jsonl`
+- core feed: `<jarvis-home>/runtime-feedback/error-events.jsonl` (when writable)
+
+Review recent failures from Jarvis core:
+
+```bash
+./scripts/jarvis/list_runtime_errors.sh 50
+```
 
 ## References
 

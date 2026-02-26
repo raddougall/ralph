@@ -13,7 +13,7 @@ Before starting, check whether a relevant skill exists under `skills/` in this r
    - `main`: work directly on `JARVIS_MAIN_BRANCH` (default `main`); do not create/switch to PRD feature branches.
    - `current`: stay on the current branch; do not create/switch branches for the story.
    - `prd` (default): use PRD `branchName`; switch to it or create it from `JARVIS_MAIN_BRANCH` (default `main`) if missing.
-4. Pick the **highest priority** user story where `passes: false` and `notes` does not start with `BLOCKED:`
+4. Pick the **highest priority** executable user story where `passes: false`, `notes` does not start with `BLOCKED:`, and the story is not marked planning/skip (`planning: true`, `skip: true`, or `clickupStatus: "planning"`).
 5. If ClickUp is configured (see below), find the matching task for the story, move it from `to do` to `in progress`, and post a kickoff activity comment with the implementation plan
 6. Implement that single user story and post ClickUp progress comments at major milestones (plan complete, code complete, tests complete)
 7. Run the full automated quality suite for the changed scope using CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)

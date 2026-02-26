@@ -150,6 +150,22 @@ if [[ -z "$todo_status" || -z "$done_status" ]]; then
   exit 1
 fi
 
+resolve_clickup_status() {
+  local requested_status="$1"
+  if [[ -z "$requested_status" ]]; then
+    echo ""
+    return
+  fi
+
+  jq -r --arg requested_status "$requested_status" '
+    ([
+      .statuses[]
+      | select((.status | ascii_downcase) == ($requested_status | ascii_downcase))
+    ][0].status)
+    // empty
+  ' <<<"$list_response"
+}
+
 echo "Using list ID: $CLICKUP_LIST_ID"
 echo "Status mapping: todo='$todo_status' done='$done_status'"
 
@@ -201,12 +217,20 @@ while IFS= read -r story; do
   story_id="$(jq -r '.id' <<<"$story")"
   title="$(jq -r '.title' <<<"$story")"
   passes="$(jq -r '.passes' <<<"$story")"
+  story_clickup_status="$(jq -r '.clickupStatus // empty' <<<"$story")"
   priority="$(jq -r '.priority' <<<"$story")"
 
   task_name="[$story_id] $title"
-  status="$todo_status"
-  if [[ "$passes" == "true" ]]; then
-    status="$done_status"
+  if [[ -n "$story_clickup_status" ]]; then
+    status="$(resolve_clickup_status "$story_clickup_status")"
+    if [[ -z "$status" ]]; then
+      status="$story_clickup_status"
+    fi
+  else
+    status="$todo_status"
+    if [[ "$passes" == "true" ]]; then
+      status="$done_status"
+    fi
   fi
   clickup_priority="$(priority_to_clickup "$priority")"
   description="$(build_description "$story")"

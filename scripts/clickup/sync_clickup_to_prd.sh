@@ -171,6 +171,7 @@ stories_from_clickup="$(
           description: parse_description($raw),
           acceptanceCriteria: parse_acceptance($raw),
           notes: parse_notes($raw),
+          clickupStatus: ($task.status.status // ""),
           priority: priority_to_local($task.priority.priority // ""),
           passes: (
             (($task.status.type // "") | ascii_downcase) as $type
@@ -340,4 +341,3 @@ if [[ "$CLICKUP_SYNC_APPEND_PROGRESS" == "1" ]]; then
     echo "---"
   } >>"$PROGRESS_FILE"
 fi
-

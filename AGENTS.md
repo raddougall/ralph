@@ -52,6 +52,7 @@ npm run dev
 - Use `JARVIS_BRANCH_POLICY` to control branching strategy per run (`prd`, `main`, `current`) so early-system work can go direct to main without per-story branch creation.
 - Default commit scope is durable story artifacts; local scratch/session notes (especially `.gitignore`d files) should remain uncommitted unless explicitly requested as long-term docs.
 - Jarvis pins each iteration to the selected story ID, logs story id/title/priority before launch, and hard-fails if any non-target story state changes during that iteration.
+- Story scheduling should treat planning markers as non-executable (`planning: true`, `skip: true`, or `clickupStatus: "planning"`), and ClickUp sync should honor per-story `clickupStatus` before `passes` mapping.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.
 - Project iterations must run with writable access inside `JARVIS_PROJECT_DIR`; read-only intent applies to paths outside the active project root, not the project itself.
@@ -63,5 +64,6 @@ npm run dev
 - If ClickUp credentials are configured and `scripts/clickup/sync_clickup_to_prd.sh` exists, Jarvis pre-syncs ClickUp `[US-xxx]` tasks into local `prd.json` at run start (default enabled).
 - Optionally sync a human-readable directives reference doc in ClickUp at run start via `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START=1` using `scripts/clickup/sync_jarvis_directives_to_clickup.sh`.
 - Directives doc sync should target project-specific ClickUp Doc URLs and follow clean-state policy: sync on `main` commits, skip feature branches until merged.
+- Runtime failures from project runs should be auto-captured into Jarvis feedback logs so core fixes can be prioritized without manual copy/paste incident reporting.
 - If ClickUp credentials are configured, every story must use `to do` as the ready queue (`backlog` is ideas only), move status `in progress` -> `testing`, and post live task comments at `start`, `progress`, and `testing` phases with a `Jarvis/Codex` label; include commit linkage plus activity notes (implementation details, test commands/outcomes, test file paths, smoke result), keep ClickUp note content consistent with terminal summaries, link related tasks for traceability, and use ClickUp task type `bug` for bug work linked back to the originating story.
 - Approval-gated commands should be queued in `approval-queue.txt`, blocked stories marked with `BLOCKED:` in `prd.json` notes, and iterations should continue with remaining unblocked stories.
