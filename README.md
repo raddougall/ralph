@@ -249,12 +249,14 @@ Optional:
 - `CLICKUP_STATUS_TODO` (default `to do`)
 - `CLICKUP_STATUS_IN_PROGRESS` (default `in progress`)
 - `CLICKUP_STATUS_TESTING` (default `testing`)
+- `CLICKUP_STATUS_DEPLOYED` (default `deployed`)
 - `CLICKUP_COMMENT_AUTHOR_LABEL` (default `Jarvis/Codex`)
 - `JARVIS_CLICKUP_SYNC_ON_START` (default `1`: run `scripts/clickup/sync_clickup_to_prd.sh` before iterations)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default `0`: set `1` to fail fast if pre-sync fails)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default `0`: run `scripts/clickup/sync_jarvis_directives_to_clickup.sh` before iterations)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default `0`: set `1` to fail fast if directives sync fails)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY` (default `main_only`: skip directives sync on feature branches)
+- `JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN` (default `0`: when `1`, only main-branch story completions auto-transition to `CLICKUP_STATUS_DEPLOYED`; non-main stays `testing`)
 - `JARVIS_APPROVAL_QUEUE_FILE` (default `./approval-queue.txt`)
 - `GITHUB_REPO_URL` (used for commit URL links on tasks)
 - `CLICKUP_DIRECTIVES_DOC_URL` (target ClickUp Doc URL such as `https://app.clickup.com/<workspace>/v/dc/<doc_id>`)
@@ -264,7 +266,7 @@ Optional:
 - Per-project doc targeting lives in `scripts/clickup/.env.clickup` (keep each project’s `CLICKUP_DIRECTIVES_DOC_URL` different as needed)
 - Per-story override in `prd.json`: `clickupStatus` (if set, this status is used when pushing PRD -> ClickUp before fallback to `passes` mapping)
 
-This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` only after code changes are committed, tests run, and task activity is updated with implementation notes, exact test commands/outcomes, and test file locations. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
+This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` after implementation. For branch-based workflows, non-main work remains `testing` for manual verification; optional deploy transitions should be main-only. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
 
 ## Key Files
 

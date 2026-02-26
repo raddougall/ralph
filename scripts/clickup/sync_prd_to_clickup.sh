@@ -12,6 +12,10 @@ set -euo pipefail
 #   PRD_FILE             (default: ./prd.json)
 #   DRY_RUN              (set to 1 to print actions only)
 #   CLICKUP_STATUS_TODO  (default: to do)
+#   CLICKUP_STATUS_TESTING (default: testing)
+#   CLICKUP_STATUS_DEPLOYED (default: deployed)
+#   JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN (default: 0)
+#   JARVIS_MAIN_BRANCH (default: main)
 #
 # Example:
 #   CLICKUP_TOKEN=... \
@@ -32,6 +36,10 @@ CLICKUP_API_BASE="${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}"
 PRD_FILE="${PRD_FILE:-./prd.json}"
 DRY_RUN="${DRY_RUN:-0}"
 CLICKUP_STATUS_TODO="${CLICKUP_STATUS_TODO:-to do}"
+CLICKUP_STATUS_TESTING="${CLICKUP_STATUS_TESTING:-testing}"
+CLICKUP_STATUS_DEPLOYED="${CLICKUP_STATUS_DEPLOYED:-deployed}"
+CLICKUP_MAIN_BRANCH="${JARVIS_MAIN_BRANCH:-${RALPH_MAIN_BRANCH:-main}}"
+CLICKUP_AUTO_DEPLOY_ON_MAIN="${JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN:-${RALPH_CLICKUP_AUTO_DEPLOY_ON_MAIN:-0}}"
 
 if [[ -z "${CLICKUP_TOKEN:-}" ]]; then
   echo "Missing required env var: CLICKUP_TOKEN" >&2
@@ -166,8 +174,20 @@ resolve_clickup_status() {
   ' <<<"$list_response"
 }
 
+testing_status="$(resolve_clickup_status "$CLICKUP_STATUS_TESTING")"
+if [[ -z "$testing_status" ]]; then
+  testing_status="$CLICKUP_STATUS_TESTING"
+fi
+
+deployed_status="$(resolve_clickup_status "$CLICKUP_STATUS_DEPLOYED")"
+if [[ -z "$deployed_status" ]]; then
+  deployed_status="$CLICKUP_STATUS_DEPLOYED"
+fi
+
+current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+
 echo "Using list ID: $CLICKUP_LIST_ID"
-echo "Status mapping: todo='$todo_status' done='$done_status'"
+echo "Status mapping: todo='$todo_status' testing='$testing_status' deployed='$deployed_status' done='$done_status'"
 
 tasks_file="$(mktemp)"
 trap 'rm -f "$tasks_file"' EXIT
@@ -229,7 +249,10 @@ while IFS= read -r story; do
   else
     status="$todo_status"
     if [[ "$passes" == "true" ]]; then
-      status="$done_status"
+      status="$testing_status"
+      if [[ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" == "1" && -n "$current_branch" && "$current_branch" == "$CLICKUP_MAIN_BRANCH" ]]; then
+        status="$deployed_status"
+      fi
     fi
   fi
   clickup_priority="$(priority_to_clickup "$priority")"

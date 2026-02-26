@@ -14,8 +14,10 @@ BRANCH_POLICY_RAW=${JARVIS_BRANCH_POLICY:-${RALPH_BRANCH_POLICY:-prd}}
 MAIN_BRANCH=${JARVIS_MAIN_BRANCH:-${RALPH_MAIN_BRANCH:-main}}
 CLICKUP_STATUS_IN_PROGRESS=${CLICKUP_STATUS_IN_PROGRESS:-in progress}
 CLICKUP_STATUS_TESTING=${CLICKUP_STATUS_TESTING:-testing}
+CLICKUP_STATUS_DEPLOYED=${CLICKUP_STATUS_DEPLOYED:-deployed}
 CLICKUP_STATUS_WAITING=${CLICKUP_STATUS_WAITING:-waiting}
 CLICKUP_STATUS_STUCK=${CLICKUP_STATUS_STUCK:-stuck}
+CLICKUP_AUTO_DEPLOY_ON_MAIN=${JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN:-${RALPH_CLICKUP_AUTO_DEPLOY_ON_MAIN:-0}}
 CLICKUP_COMMENT_AUTHOR_LABEL=${CLICKUP_COMMENT_AUTHOR_LABEL:-Jarvis/Codex}
 CLICKUP_LIST_ID_RESOLVED=""
 CLICKUP_AUTH_HEADER=""
@@ -231,6 +233,18 @@ clickup_api_post_comment() {
   local comment="$2"
 
   jq -n --arg comment_text "$comment" '{comment_text:$comment_text, notify_all:false}'     | curl -sS -X POST "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}/task/$task_id/comment"       -H "$CLICKUP_AUTH_HEADER"       -H "Content-Type: application/json"       --data-binary @- >/dev/null
+}
+
+clickup_completion_status() {
+  local current_branch=""
+  current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+
+  if [ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" = "1" ] && [ -n "$current_branch" ] && [ "$current_branch" = "$MAIN_BRANCH" ]; then
+    echo "$CLICKUP_STATUS_DEPLOYED"
+    return
+  fi
+
+  echo "$CLICKUP_STATUS_TESTING"
 }
 
 clickup_find_task_id_for_story() {
@@ -1368,17 +1382,22 @@ Reason:
 
   if echo "$OUTPUT" | grep -q "<promise>BLOCKED</promise>" || { [ -n "$CURRENT_STORY_ID" ] && story_is_blocked "$CURRENT_STORY_ID"; }; then
     RECOVERED=0
+    COMPLETION_STATUS="$(clickup_completion_status)"
+    COMPLETION_PHASE="testing"
+    if [ "$COMPLETION_STATUS" = "$CLICKUP_STATUS_DEPLOYED" ]; then
+      COMPLETION_PHASE="deployed"
+    fi
 
     if [ -n "$CURRENT_STORY_ID" ]; then
       if run_git_commit_recovery "$CURRENT_STORY_ID"; then
         RECOVERED=1
         if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then
-          clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_TESTING" || true
-          clickup_api_post_comment "$CURRENT_TASK_ID" "[$CLICKUP_COMMENT_AUTHOR_LABEL][$CURRENT_STORY_ID][testing][jarvis-recovery]
+          clickup_api_put_status "$CURRENT_TASK_ID" "$COMPLETION_STATUS" || true
+          clickup_api_post_comment "$CURRENT_TASK_ID" "[$CLICKUP_COMMENT_AUTHOR_LABEL][$CURRENT_STORY_ID][$COMPLETION_PHASE][jarvis-recovery]
 Changed:
 - Jarvis recovered commit after nested sandbox blocked .git/index.lock.
 Outcome:
-- Commit recovered in runner context; task returned to testing." || true
+- Commit recovered in runner context; task moved to $COMPLETION_STATUS." || true
         fi
       fi
     fi
@@ -1435,7 +1454,7 @@ Reason:
   
   if clickup_is_ready && [ -n "$CURRENT_STORY_ID" ] && [ -n "$CURRENT_TASK_ID" ]; then
     if story_passes "$CURRENT_STORY_ID"; then
-      clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_TESTING" || true
+      clickup_api_put_status "$CURRENT_TASK_ID" "$(clickup_completion_status)" || true
     fi
   fi
 

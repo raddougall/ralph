@@ -89,6 +89,7 @@ The sync script:
 - Updates existing tasks matching the `[US-xxx]` prefix
 
 Use `CLICKUP_STATUS_TODO` if your ready-to-work status has a different label.
+For branch-based workflows, keep `JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN=0` so `passes=true` maps to `testing` by default; enable main-only deploy transitions with `JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN=1` when desired.
 
 Example:
 
