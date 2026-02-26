@@ -13,6 +13,7 @@ CODEX_BIN=${JARVIS_CODEX_BIN:-${RALPH_CODEX_BIN:-codex}}
 BRANCH_POLICY_RAW=${JARVIS_BRANCH_POLICY:-${RALPH_BRANCH_POLICY:-prd}}
 MAIN_BRANCH=${JARVIS_MAIN_BRANCH:-${RALPH_MAIN_BRANCH:-main}}
 CLICKUP_STATUS_IN_PROGRESS=${CLICKUP_STATUS_IN_PROGRESS:-in progress}
+CLICKUP_STATUS_DONE=${CLICKUP_STATUS_DONE:-done}
 CLICKUP_STATUS_TESTING=${CLICKUP_STATUS_TESTING:-testing}
 CLICKUP_STATUS_DEPLOYED=${CLICKUP_STATUS_DEPLOYED:-deployed}
 CLICKUP_STATUS_WAITING=${CLICKUP_STATUS_WAITING:-waiting}
@@ -239,8 +240,12 @@ clickup_completion_status() {
   local current_branch=""
   current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 
-  if [ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" = "1" ] && [ -n "$current_branch" ] && [ "$current_branch" = "$MAIN_BRANCH" ]; then
-    echo "$CLICKUP_STATUS_DEPLOYED"
+  if [ -n "$current_branch" ] && [ "$current_branch" = "$MAIN_BRANCH" ]; then
+    if [ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" = "1" ]; then
+      echo "$CLICKUP_STATUS_DEPLOYED"
+      return
+    fi
+    echo "$CLICKUP_STATUS_DONE"
     return
   fi
 

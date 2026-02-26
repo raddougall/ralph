@@ -248,8 +248,10 @@ Optional:
 
 - `CLICKUP_STATUS_TODO` (default `to do`)
 - `CLICKUP_STATUS_IN_PROGRESS` (default `in progress`)
+- `CLICKUP_STATUS_DONE` (default `done`)
 - `CLICKUP_STATUS_TESTING` (default `testing`)
 - `CLICKUP_STATUS_DEPLOYED` (default `deployed`)
+- `CLICKUP_STATUS_PLANNING` (default `planning`)
 - `CLICKUP_COMMENT_AUTHOR_LABEL` (default `Jarvis/Codex`)
 - `JARVIS_CLICKUP_SYNC_ON_START` (default `1`: run `scripts/clickup/sync_clickup_to_prd.sh` before iterations)
 - `JARVIS_CLICKUP_SYNC_STRICT` (default `0`: set `1` to fail fast if pre-sync fails)
@@ -266,7 +268,7 @@ Optional:
 - Per-project doc targeting lives in `scripts/clickup/.env.clickup` (keep each project’s `CLICKUP_DIRECTIVES_DOC_URL` different as needed)
 - Per-story override in `prd.json`: `clickupStatus` (if set, this status is used when pushing PRD -> ClickUp before fallback to `passes` mapping)
 
-This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and stories move to `testing` after implementation. For branch-based workflows, non-main work remains `testing` for manual verification; optional deploy transitions should be main-only. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
+This keeps local `prd.json` aligned with ClickUp before each run, while still preserving per-story activity updates during execution. `to do` is the active ready queue, `backlog` is future ideas, and story completion status is branch-aware by default: `main -> done`, non-main -> `testing`, and optional deploy transitions are main-only when enabled. Planning tasks are preserved as `planning` unless explicitly overridden. Jarvis must post these comments itself (never asking the user to copy updates) and should keep the final ClickUp completion comment consistent with the terminal summary. If bugs are found, create/use ClickUp task type `bug`, link bug tasks to the originating story task, and include repro context.
 
 ## Key Files
 

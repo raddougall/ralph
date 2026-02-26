@@ -12,8 +12,10 @@ set -euo pipefail
 #   PRD_FILE             (default: ./prd.json)
 #   DRY_RUN              (set to 1 to print actions only)
 #   CLICKUP_STATUS_TODO  (default: to do)
+#   CLICKUP_STATUS_DONE (default: done)
 #   CLICKUP_STATUS_TESTING (default: testing)
 #   CLICKUP_STATUS_DEPLOYED (default: deployed)
+#   CLICKUP_STATUS_PLANNING (default: planning)
 #   JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN (default: 0)
 #   JARVIS_MAIN_BRANCH (default: main)
 #
@@ -36,8 +38,10 @@ CLICKUP_API_BASE="${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}"
 PRD_FILE="${PRD_FILE:-./prd.json}"
 DRY_RUN="${DRY_RUN:-0}"
 CLICKUP_STATUS_TODO="${CLICKUP_STATUS_TODO:-to do}"
+CLICKUP_STATUS_DONE="${CLICKUP_STATUS_DONE:-done}"
 CLICKUP_STATUS_TESTING="${CLICKUP_STATUS_TESTING:-testing}"
 CLICKUP_STATUS_DEPLOYED="${CLICKUP_STATUS_DEPLOYED:-deployed}"
+CLICKUP_STATUS_PLANNING="${CLICKUP_STATUS_PLANNING:-planning}"
 CLICKUP_MAIN_BRANCH="${JARVIS_MAIN_BRANCH:-${RALPH_MAIN_BRANCH:-main}}"
 CLICKUP_AUTO_DEPLOY_ON_MAIN="${JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN:-${RALPH_CLICKUP_AUTO_DEPLOY_ON_MAIN:-0}}"
 
@@ -179,15 +183,25 @@ if [[ -z "$testing_status" ]]; then
   testing_status="$CLICKUP_STATUS_TESTING"
 fi
 
+done_status_preferred="$(resolve_clickup_status "$CLICKUP_STATUS_DONE")"
+if [[ -z "$done_status_preferred" ]]; then
+  done_status_preferred="$CLICKUP_STATUS_DONE"
+fi
+
 deployed_status="$(resolve_clickup_status "$CLICKUP_STATUS_DEPLOYED")"
 if [[ -z "$deployed_status" ]]; then
   deployed_status="$CLICKUP_STATUS_DEPLOYED"
 fi
 
+planning_status="$(resolve_clickup_status "$CLICKUP_STATUS_PLANNING")"
+if [[ -z "$planning_status" ]]; then
+  planning_status="$CLICKUP_STATUS_PLANNING"
+fi
+
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 
 echo "Using list ID: $CLICKUP_LIST_ID"
-echo "Status mapping: todo='$todo_status' testing='$testing_status' deployed='$deployed_status' done='$done_status'"
+echo "Status mapping: todo='$todo_status' planning='$planning_status' done='$done_status_preferred' testing='$testing_status' deployed='$deployed_status' (legacy done='$done_status')"
 
 tasks_file="$(mktemp)"
 trap 'rm -f "$tasks_file"' EXIT
@@ -249,9 +263,13 @@ while IFS= read -r story; do
   else
     status="$todo_status"
     if [[ "$passes" == "true" ]]; then
-      status="$testing_status"
-      if [[ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" == "1" && -n "$current_branch" && "$current_branch" == "$CLICKUP_MAIN_BRANCH" ]]; then
-        status="$deployed_status"
+      if [[ -n "$current_branch" && "$current_branch" == "$CLICKUP_MAIN_BRANCH" ]]; then
+        status="$done_status_preferred"
+        if [[ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" == "1" ]]; then
+          status="$deployed_status"
+        fi
+      else
+        status="$testing_status"
       fi
     fi
   fi
@@ -296,6 +314,12 @@ while IFS= read -r story; do
   current_priority="$(jq -r '.priority.priority // ""' <<<"$existing_task")"
   current_description="$(jq -r '.description // ""' <<<"$existing_task")"
   current_name="$(jq -r '.name' <<<"$existing_task")"
+
+  if [[ -z "$story_clickup_status" && "$passes" != "true" ]]; then
+    if [[ "$(echo "$current_status" | tr '[:upper:]' '[:lower:]')" == "$(echo "$planning_status" | tr '[:upper:]' '[:lower:]')" ]]; then
+      status="$current_status"
+    fi
+  fi
 
   if [[ "$current_status" == "$status" && "$current_priority" == "$clickup_priority" && "$current_name" == "$task_name" && "$current_description" == "$description" ]]; then
     unchanged=$((unchanged + 1))
