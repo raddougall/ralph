@@ -51,7 +51,7 @@ npm run dev
 - Treat repeated Codex stream disconnect/reconnect loops (for example `codex/responses` transport interruptions) as retryable infrastructure failures, not story failures.
 - Use `JARVIS_BRANCH_POLICY` to control branching strategy per run (`prd`, `main`, `current`) so early-system work can go direct to main without per-story branch creation.
 - Default commit scope is durable story artifacts; local scratch/session notes (especially `.gitignore`d files) should remain uncommitted unless explicitly requested as long-term docs.
-- Jarvis pins each iteration to the selected story ID, logs story id/title/priority before launch, and hard-fails if any non-target story state changes during that iteration.
+- Jarvis pins each iteration to the selected story ID, logs story id/title/priority before launch, and audits non-target `prd.json` story mutations with end-of-run summary output for manual review.
 - Story scheduling should treat planning markers as non-executable (`planning: true`, `skip: true`, or `clickupStatus: "planning"`), and ClickUp sync should honor per-story `clickupStatus` before `passes` mapping.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Run Jarvis with `JARVIS_PROJECT_DIR` (legacy `RALPH_PROJECT_DIR`) or from project cwd so `prd.json`, `progress.txt`, archives, and logs stay project-local.

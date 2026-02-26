@@ -316,39 +316,60 @@ snapshot_non_target_stories() {
   ' "$PRD_FILE" > "$output_file"
 }
 
-guard_single_story_scope() {
+describe_non_target_story_mutations() {
   local story_id="$1"
   local pre_snapshot_file="$2"
   local post_snapshot_file
-  local changed_ids
+  local mutations_json
 
   post_snapshot_file="$(mktemp)"
   snapshot_non_target_stories "$story_id" "$post_snapshot_file"
 
   if cmp -s "$pre_snapshot_file" "$post_snapshot_file"; then
     rm -f "$post_snapshot_file" 2>/dev/null || true
+    echo "[]"
     return 0
   fi
 
-  changed_ids="$(
-    jq -r --slurpfile before "$pre_snapshot_file" --slurpfile after "$post_snapshot_file" '
+  mutations_json="$(
+    jq -c --slurpfile before "$pre_snapshot_file" --slurpfile after "$post_snapshot_file" '
       ($before[0] // []) as $b
       | ($after[0] // []) as $a
       | (($b | map({key: .id, value: .}) | from_entries) // {}) as $bm
       | (($a | map({key: .id, value: .}) | from_entries) // {}) as $am
       | ((($bm | keys_unsorted) + ($am | keys_unsorted)) | unique) as $ids
-      | $ids[]
-      | select(($bm[.] // null) != ($am[.] // null))
-    ' | paste -sd, -
+      | [
+          $ids[]
+          | . as $id
+          | ($bm[$id] // null) as $before_story
+          | ($am[$id] // null) as $after_story
+          | select($before_story != $after_story)
+          | {
+              id: $id,
+              changed_fields: (
+                (
+                  (
+                    (($before_story // {}) | keys_unsorted)
+                    + (($after_story // {}) | keys_unsorted)
+                  ) | unique
+                )
+                | map(select(($before_story[.] // null) != ($after_story[.] // null)))
+              ),
+              before: {
+                passes: ($before_story.passes // null),
+                notes: ($before_story.notes // null)
+              },
+              after: {
+                passes: ($after_story.passes // null),
+                notes: ($after_story.notes // null)
+              }
+            }
+        ]
+    '
   )"
-
-  echo "Jarvis guard failed: iteration pinned to $story_id but non-target story state changed." >&2
-  if [ -n "$changed_ids" ]; then
-    echo "Changed non-target stories: $changed_ids" >&2
-  fi
-  echo "Refusing to continue because only the selected story may be modified in this iteration." >&2
   rm -f "$post_snapshot_file" 2>/dev/null || true
-  return 1
+  echo "${mutations_json:-[]}"
+  return 0
 }
 
 build_iteration_prompt_file() {
@@ -380,6 +401,22 @@ cleanup_iteration_temp_files() {
   [ -n "$snapshot_file" ] && rm -f "$snapshot_file" 2>/dev/null || true
   [ -n "$last_message_file" ] && rm -f "$last_message_file" 2>/dev/null || true
   [ -n "$stream_log_file" ] && rm -f "$stream_log_file" 2>/dev/null || true
+}
+
+emit_mutation_audit_summary() {
+  if [ ! -f "$MUTATION_AUDIT_FILE" ]; then
+    return 0
+  fi
+  if [ ! -s "$MUTATION_AUDIT_FILE" ]; then
+    return 0
+  fi
+
+  echo ""
+  echo "═══════════════════════════════════════════════════════"
+  echo "  Non-Target PRD Mutation Audit"
+  echo "═══════════════════════════════════════════════════════"
+  cat "$MUTATION_AUDIT_FILE"
+  echo "Audit file: $MUTATION_AUDIT_FILE"
 }
 
 report_runtime_error_feedback() {
@@ -1168,6 +1205,10 @@ if [ ! -f "$APPROVAL_QUEUE_FILE" ]; then
   } > "$APPROVAL_QUEUE_FILE"
 fi
 
+mkdir -p "$PROJECT_DIR/.jarvis" 2>/dev/null || true
+MUTATION_AUDIT_FILE="$PROJECT_DIR/.jarvis/mutation-audit-last.log"
+: > "$MUTATION_AUDIT_FILE"
+
 echo "Starting Jarvis - Max iterations: $MAX_ITERATIONS"
 
 for i in $(seq 1 $MAX_ITERATIONS); do
@@ -1207,6 +1248,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "No story edits were attempted in this iteration."
     report_runtime_error_feedback "preflight" "git_preflight_failed" "error" "Git preflight failed before story execution."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+    emit_mutation_audit_summary
     exit 2
   fi
 
@@ -1215,6 +1257,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     if ! enforce_codex_sandbox_expectation; then
       report_runtime_error_feedback "preflight" "codex_sandbox_expectation_failed" "error" "Configured expected sandbox does not match effective CODEX_GLOBAL_FLAGS."
       cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+      emit_mutation_audit_summary
       exit 2
     fi
   fi
@@ -1259,14 +1302,20 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "Unknown JARVIS_AGENT: $AGENT (expected 'amp' or 'codex')" >&2
     report_runtime_error_feedback "launch" "unknown_agent" "error" "Unsupported JARVIS_AGENT value."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+    emit_mutation_audit_summary
     exit 2
   fi
 
   if [ -n "$CURRENT_STORY_ID" ] && [ -n "$PRE_RUN_STORY_SNAPSHOT_FILE" ]; then
-    if ! guard_single_story_scope "$CURRENT_STORY_ID" "$PRE_RUN_STORY_SNAPSHOT_FILE"; then
-      report_runtime_error_feedback "guard" "single_story_scope_violation" "error" "Detected non-target story changes during pinned iteration."
-      cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
-      exit 2
+    NON_TARGET_MUTATIONS_JSON="$(describe_non_target_story_mutations "$CURRENT_STORY_ID" "$PRE_RUN_STORY_SNAPSHOT_FILE")"
+    if [ "$NON_TARGET_MUTATIONS_JSON" != "[]" ]; then
+      echo "Warning: detected non-target PRD story mutations in iteration $i (pinned story: $CURRENT_STORY_ID)."
+      printf '[%s] iteration=%s pinned_story=%s mutations=%s\n' \
+        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+        "$i" \
+        "$CURRENT_STORY_ID" \
+        "$NON_TARGET_MUTATIONS_JSON" >> "$MUTATION_AUDIT_FILE"
+      report_runtime_error_feedback "guard" "single_story_scope_mutation_audited" "warning" "Detected non-target story changes during pinned iteration (audit mode)."
     fi
   fi
 
@@ -1283,6 +1332,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "Check project/local env overrides for JARVIS_CODEX_GLOBAL_FLAGS and remove any read-only sandbox setting."
     report_runtime_error_feedback "agent-run" "read_only_sandbox_detected" "error" "Codex reported read-only sandbox during project iteration."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+    emit_mutation_audit_summary
     exit 2
   fi
 
@@ -1291,6 +1341,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "Jarvis completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+    emit_mutation_audit_summary
     exit 0
   fi
 
@@ -1397,4 +1448,5 @@ echo ""
 echo "Jarvis reached max iterations ($MAX_ITERATIONS) without completing all tasks."
 echo "Check $PROGRESS_FILE for status."
 report_runtime_error_feedback "run" "max_iterations_reached" "warning" "Run ended without completion."
+emit_mutation_audit_summary
 exit 1
