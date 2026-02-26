@@ -52,6 +52,11 @@ npm run dev
 - Use `JARVIS_BRANCH_POLICY` to control branching strategy per run (`prd`, `main`, `current`) so early-system work can go direct to main without per-story branch creation.
 - Default commit scope is durable story artifacts; local scratch/session notes (especially `.gitignore`d files) should remain uncommitted unless explicitly requested as long-term docs.
 - Jarvis pins each iteration to the selected story ID, logs story id/title/priority before launch, and audits non-target `prd.json` story mutations with end-of-run summary output for manual review.
+- Pinned-story mutation handling is configurable via `JARVIS_PINNED_SCOPE_MUTATION_POLICY` (`rollback` default, `audit`, or `fail`); rollback restores non-target PRD stories automatically.
+- Codex runs support effective capability probing (`JARVIS_CODEX_CAPABILITY_PREFLIGHT`) and optional strict fail-fast mode (`JARVIS_CODEX_CAPABILITY_PREFLIGHT_STRICT`) for nested git/network mismatches.
+- Codex iterations are timeout-bounded by default (`JARVIS_CODEX_ITERATION_TIMEOUT_SECONDS`, default `1800`) when `timeout`/`gtimeout` is available, so long context-walk stalls cannot run indefinitely.
+- Network preflight for Codex also validates npm registry reachability by default (`registry.npmjs.org`) to catch package-install blockers before story execution.
+- If nested runs cannot resolve ClickUp DNS, Jarvis disables ClickUp actions for the rest of the run instead of repeatedly retrying wrapper/env diagnostics.
 - Story scheduling should treat planning markers as non-executable (`planning: true`, `skip: true`, or `clickupStatus: "planning"`), and ClickUp sync should honor per-story `clickupStatus` before `passes` mapping.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Projects synced with the launcher include a `scripts/jarvis/house-party-protocol.sh` preset for Codex full-access runs (`danger-full-access`, network enabled, `-a never`).

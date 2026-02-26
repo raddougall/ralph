@@ -190,9 +190,15 @@ Project scoping controls:
 - `JARVIS_NETWORK_PREFLIGHT_TIMEOUT_SECONDS` (default: `8`, per-host timeout)
 - `JARVIS_OPENAI_PREFLIGHT_URL` (default: `https://chatgpt.com`, endpoint used to validate OpenAI reachability for Codex runs)
 - `JARVIS_NETWORK_PREFLIGHT_HOSTS` (optional comma-separated extra hosts to validate)
+- `JARVIS_NETWORK_PREFLIGHT_NPM_REGISTRY` (default: `1`, include `registry.npmjs.org` in Codex network preflight checks)
 - `JARVIS_BRANCH_POLICY` (default: `prd`; `main` = work directly on `JARVIS_MAIN_BRANCH`, `current` = stay on current branch, `prd` = use PRD `branchName`)
 - `JARVIS_MAIN_BRANCH` (default: `main`; used by `JARVIS_BRANCH_POLICY=main` and as PRD branch creation base)
 - `JARVIS_CODEX_SANDBOX_EXPECTED` (optional: `workspace-write` or `danger-full-access`; when set, Jarvis fails fast if effective `JARVIS_CODEX_GLOBAL_FLAGS` sandbox does not match)
+- `JARVIS_CODEX_CAPABILITY_PREFLIGHT` (default: `1`, runs a nested Codex git/network capability probe before iterations)
+- `JARVIS_CODEX_CAPABILITY_PREFLIGHT_STRICT` (default: `0`; set `1` to fail-fast when nested capability probe fails)
+- `JARVIS_CODEX_CAPABILITY_PREFLIGHT_TIMEOUT_SECONDS` (default: `180`, timeout for nested capability probe command)
+- `JARVIS_CODEX_ITERATION_TIMEOUT_SECONDS` (default: `1800`, timeout for each Codex iteration when `timeout`/`gtimeout` is available)
+- `JARVIS_PINNED_SCOPE_MUTATION_POLICY` (default: `rollback`; options: `rollback`, `audit`, `fail` for non-target `prd.json` story mutations)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default: `0`; when enabled, updates a ClickUp Doc with a human-readable Jarvis directives overview at run start)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default: `0`; set `1` to fail-fast if directives sync fails)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY` (default: `main_only`; keep docs clean by syncing only on `JARVIS_MAIN_BRANCH`)
@@ -210,6 +216,7 @@ Safety defaults:
 - Project runs are expected to write inside the active project root (`JARVIS_PROJECT_DIR`) for normal story work (code changes, tests, git commits, ClickUp updates).
 - Read-only behavior is intended for paths outside `JARVIS_PROJECT_DIR`, not for the project root itself.
 - Localhost smoke testing is allowed, but any temporary local servers must be stopped before the run completes.
+- If nested Codex DNS cannot resolve ClickUp, Jarvis disables ClickUp actions for the remainder of that run instead of repeatedly retrying.
 
 Jarvis will:
 1. Apply branch policy:

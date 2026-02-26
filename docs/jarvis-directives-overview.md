@@ -38,6 +38,8 @@ This document summarizes the runtime directives Jarvis follows during autonomous
 ## Infrastructure and Reliability Guardrails
 
 - Treat repeated Codex stream disconnect loops as retryable infrastructure failures.
+- Run nested Codex capability preflight (`JARVIS_CODEX_CAPABILITY_PREFLIGHT`) to probe effective git write + network/DNS access before story work.
+- Bound Codex iteration runtime with `JARVIS_CODEX_ITERATION_TIMEOUT_SECONDS` (default `1800` when timeout tooling exists) to prevent context-walk stalls.
 - Keep project edits scoped to `JARVIS_PROJECT_DIR`.
 - Avoid host system package-manager changes unless explicitly approved.
 - Queue approval-gated commands in `approval-queue.txt` and keep iterating unblocked work.
@@ -50,8 +52,10 @@ This document summarizes the runtime directives Jarvis follows during autonomous
 - `JARVIS_CODEX_FLAGS="--color never"`
 - If `JARVIS_CODEX_ENABLE_NETWORK=1` and workspace-write sandbox is used, Jarvis enables workspace network access for Codex runs.
 - `danger-full-access` is optional and should be used only when explicitly intended for broader host/system access.
+- For full-access runs, project wrappers provide `scripts/jarvis/house-party-protocol.sh` (Codex + network + `danger-full-access` + unattended approvals).
 - For project runs, writable access inside `JARVIS_PROJECT_DIR` is required for normal behavior (`git`, edits, tests, artifacts).
 - Read-only behavior is intended for paths outside the active project root, not for the project itself.
+- If nested Codex cannot resolve ClickUp DNS, Jarvis disables ClickUp actions for the remainder of that run to avoid repeated diagnostic loops.
 
 ## Branch-Aware Protocol Doc Sync
 

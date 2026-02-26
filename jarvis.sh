@@ -28,8 +28,13 @@ CURRENT_STORY_TITLE=""
 CURRENT_STORY_PRIORITY=""
 APPROVAL_QUEUE_BEFORE_LINES=0
 CODEX_STREAM_FAILURE_STREAK=0
+CODEX_TIMEOUT_FAILURE_STREAK=0
 ERROR_FEEDBACK_ENABLED=${JARVIS_ERROR_FEEDBACK_ENABLED:-${RALPH_ERROR_FEEDBACK_ENABLED:-1}}
 CODEX_SANDBOX_EXPECTED="${JARVIS_CODEX_SANDBOX_EXPECTED:-${RALPH_CODEX_SANDBOX_EXPECTED:-}}"
+CODEX_TIMEOUT_COMMAND=""
+CLICKUP_RUNTIME_DISABLED=0
+CLICKUP_RUNTIME_DISABLE_REASON=""
+DIRECTIVES_SYNC_RUN_END_DONE=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -155,6 +160,9 @@ load_project_clickup_env() {
   fi
 }
 has_clickup_config() {
+  if [ "$CLICKUP_RUNTIME_DISABLED" = "1" ]; then
+    return 1
+  fi
   if [ -z "${CLICKUP_TOKEN:-}" ]; then
     return 1
   fi
@@ -162,6 +170,15 @@ has_clickup_config() {
     return 1
   fi
   return 0
+}
+
+disable_clickup_for_run() {
+  local reason="$1"
+  CLICKUP_RUNTIME_DISABLED=1
+  CLICKUP_RUNTIME_DISABLE_REASON="$reason"
+  CLICKUP_LIST_ID_RESOLVED=""
+  CLICKUP_AUTH_HEADER=""
+  echo "ClickUp runtime disabled for this run: $reason"
 }
 
 clickup_extract_list_id() {
@@ -322,15 +339,6 @@ snapshot_non_target_stories() {
   jq -c --arg story_id "$story_id" '
     (.userStories // [])
     | map(select(.id != $story_id))
-    | map({
-        id: .id,
-        passes: (.passes // false),
-        notes: (.notes // ""),
-        title: (.title // ""),
-        priority: (.priority // null),
-        description: (.description // ""),
-        acceptanceCriteria: (.acceptanceCriteria // [])
-      })
     | sort_by(.id)
   ' "$PRD_FILE" > "$output_file"
 }
@@ -391,6 +399,29 @@ describe_non_target_story_mutations() {
   return 0
 }
 
+restore_non_target_story_mutations() {
+  local story_id="$1"
+  local pre_snapshot_file="$2"
+  local tmp_file
+
+  tmp_file="$(mktemp)"
+  jq --slurpfile before "$pre_snapshot_file" --arg story_id "$story_id" '
+    ($before[0] // []) as $b
+    | (($b | map({key: .id, value: .}) | from_entries) // {}) as $bm
+    | .userStories = (
+        (.userStories // [])
+        | map(
+            if .id == $story_id then
+              .
+            else
+              ($bm[.id] // .)
+            end
+          )
+      )
+  ' "$PRD_FILE" > "$tmp_file"
+  mv "$tmp_file" "$PRD_FILE"
+}
+
 build_iteration_prompt_file() {
   local story_id="$1"
   local story_title_value="$2"
@@ -405,6 +436,9 @@ build_iteration_prompt_file() {
     echo "Pinned story title: ${story_title_value:-unknown}"
     echo "Pinned story priority: ${story_priority_value:-unknown}"
     echo "Do not modify any other story in prd.json (including passes/notes updates)."
+    echo "Bound infrastructure diagnostics to one attempt each (ClickUp sync/network check) unless this story explicitly targets Jarvis/ClickUp/tooling."
+    echo "If ClickUp DNS fails, log one warning and continue story implementation/tests without repeated wrapper/env investigation."
+    echo "Do not edit scripts/jarvis/*, scripts/clickup/*, or env example files unless the pinned story explicitly requires tooling changes."
   } >> "$output_file"
 }
 
@@ -591,6 +625,27 @@ extract_recovery_commit_command() {
   echo "$command_line"
 }
 
+escape_single_quotes_for_shell() {
+  local value="$1"
+  printf '%s' "$value" | sed "s/'/'\\\\''/g"
+}
+
+default_recovery_commit_command() {
+  local story_id="$1"
+  local story_title_value=""
+  local commit_subject=""
+  local escaped_subject=""
+
+  story_title_value="$(story_title "$story_id")"
+  if [ -z "$story_title_value" ]; then
+    story_title_value="Story completion"
+  fi
+
+  commit_subject="feat: [$story_id] - $story_title_value"
+  escaped_subject="$(escape_single_quotes_for_shell "$commit_subject")"
+  echo "git add -A && git commit -m '$escaped_subject'"
+}
+
 is_safe_recovery_command() {
   local command_line="$1"
 
@@ -607,13 +662,20 @@ is_safe_recovery_command() {
 
 run_git_commit_recovery() {
   local story_id="$1"
+  local allow_default_command="${2:-0}"
   local command_line
   local recovery_note
   local tmp_file
+  local recovery_source="approval-queue"
 
   command_line="$(extract_recovery_commit_command "$story_id" || true)"
   if [ -z "$command_line" ]; then
-    return 1
+    if [ "$allow_default_command" = "1" ]; then
+      command_line="$(default_recovery_commit_command "$story_id")"
+      recovery_source="auto-default"
+    else
+      return 1
+    fi
   fi
 
   if ! is_safe_recovery_command "$command_line"; then
@@ -637,7 +699,7 @@ run_git_commit_recovery() {
     echo "## $(date -u '+%Y-%m-%d %H:%M:%S UTC') - $story_id"
     echo "Session: Jarvis commit recovery"
     echo "- Recovered commit after nested Codex sandbox blocked .git/index.lock."
-    echo "- Executed queued git command from approval queue in runner context."
+    echo "- Executed recovery commit command in runner context (source: $recovery_source)."
     echo "- Restored story state to passes=true in prd.json."
     echo "---"
   } >> "$PROGRESS_FILE"
@@ -666,6 +728,54 @@ check_https_host_reachable() {
   curl -sS -I --max-time "$timeout_seconds" "https://$host" >/dev/null 2>&1
 }
 
+detect_timeout_command() {
+  if command -v timeout >/dev/null 2>&1; then
+    echo "timeout"
+    return 0
+  fi
+  if command -v gtimeout >/dev/null 2>&1; then
+    echo "gtimeout"
+    return 0
+  fi
+  echo ""
+}
+
+output_has_git_lock_permission_error() {
+  local output="$1"
+  echo "$output" | grep -Eqi "unable to create '?.*\.git/index\.lock'?.*(operation not permitted|permission denied)|cannot lock ref|operation not permitted.*\.git"
+}
+
+output_has_dns_failure() {
+  local output="$1"
+  echo "$output" | grep -Eqi "could not resolve host|getaddrinfo (enotfound|eai_again)|name or service not known|temporary failure in name resolution"
+}
+
+output_has_clickup_dns_failure() {
+  local output="$1"
+  echo "$output" | grep -Eqi "(api\.clickup\.com.*(could not resolve host|getaddrinfo))|(could not resolve host: api\.clickup\.com)"
+}
+
+has_dirty_worktree() {
+  if ! git diff --quiet --ignore-submodules -- 2>/dev/null; then
+    return 0
+  fi
+  if ! git diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
+    return 0
+  fi
+  if [ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]; then
+    return 0
+  fi
+  return 1
+}
+
+run_end_directives_sync_once() {
+  if [ "$DIRECTIVES_SYNC_RUN_END_DONE" = "1" ]; then
+    return 0
+  fi
+  DIRECTIVES_SYNC_RUN_END_DONE=1
+  run_clickup_directives_sync "run-end"
+}
+
 run_network_preflight() {
   local enabled="${JARVIS_NETWORK_PREFLIGHT:-${RALPH_NETWORK_PREFLIGHT:-1}}"
   local strict_mode="${JARVIS_NETWORK_PREFLIGHT_STRICT:-${RALPH_NETWORK_PREFLIGHT_STRICT:-1}}"
@@ -689,6 +799,9 @@ run_network_preflight() {
 
   if [ "$AGENT" = "codex" ]; then
     hosts+=("$(extract_host_from_url "${JARVIS_OPENAI_PREFLIGHT_URL:-${RALPH_OPENAI_PREFLIGHT_URL:-https://chatgpt.com}}")")
+    if [ "${JARVIS_NETWORK_PREFLIGHT_NPM_REGISTRY:-${RALPH_NETWORK_PREFLIGHT_NPM_REGISTRY:-1}}" = "1" ]; then
+      hosts+=("registry.npmjs.org")
+    fi
   fi
 
   if has_clickup_config; then
@@ -737,7 +850,7 @@ run_network_preflight() {
   fi
 
   echo "Network preflight failed. Unreachable hosts: ${failed_hosts[*]}" >&2
-  echo "This run context appears to block external DNS/network (OpenAI/ClickUp)." >&2
+  echo "This run context appears to block external DNS/network (OpenAI/ClickUp/npm registry)." >&2
   echo "Re-run with network-enabled permissions or disable strict mode for diagnostics." >&2
 
   if [ "$strict_mode" = "1" ]; then
@@ -754,6 +867,11 @@ run_clickup_prd_pull_sync() {
   local sync_script="$PROJECT_DIR/scripts/clickup/sync_clickup_to_prd.sh"
 
   if [ "$should_sync" = "0" ]; then
+    return 0
+  fi
+
+  if [ "$CLICKUP_RUNTIME_DISABLED" = "1" ]; then
+    echo "ClickUp pre-sync skipped: runtime disabled (${CLICKUP_RUNTIME_DISABLE_REASON:-unspecified})."
     return 0
   fi
 
@@ -791,6 +909,11 @@ run_clickup_directives_sync() {
   local current_branch=""
 
   if [ "$should_sync" = "0" ]; then
+    return 0
+  fi
+
+  if [ "$CLICKUP_RUNTIME_DISABLED" = "1" ]; then
+    echo "Directives sync skipped: ClickUp runtime disabled (${CLICKUP_RUNTIME_DISABLE_REASON:-unspecified})."
     return 0
   fi
 
@@ -889,6 +1012,149 @@ enforce_codex_sandbox_expectation() {
     return 1
   fi
 
+  return 0
+}
+
+run_codex_effective_capability_preflight() {
+  local enabled="${JARVIS_CODEX_CAPABILITY_PREFLIGHT:-${RALPH_CODEX_CAPABILITY_PREFLIGHT:-1}}"
+  local strict_mode="${JARVIS_CODEX_CAPABILITY_PREFLIGHT_STRICT:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_STRICT:-0}}"
+  local timeout_seconds="${JARVIS_CODEX_CAPABILITY_PREFLIGHT_TIMEOUT_SECONDS:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_TIMEOUT_SECONDS:-180}}"
+  local -a hosts=()
+  local -a unique_hosts=()
+  local host
+  local existing
+  local seen
+  local host_list=""
+  local probe_prompt_file=""
+  local probe_last_message_file=""
+  local probe_stream_log_file=""
+  local output=""
+  local cmd_status=0
+  local fail_reasons=()
+  local host_failures=""
+
+  if [ "$AGENT" != "codex" ]; then
+    return 0
+  fi
+  if [ "$enabled" = "0" ]; then
+    return 0
+  fi
+
+  hosts+=("$(extract_host_from_url "${JARVIS_OPENAI_PREFLIGHT_URL:-${RALPH_OPENAI_PREFLIGHT_URL:-https://chatgpt.com}}")")
+  hosts+=("registry.npmjs.org")
+  if has_clickup_config; then
+    hosts+=("$(extract_host_from_url "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}")")
+  fi
+  if [ -n "${JARVIS_CODEX_CAPABILITY_PREFLIGHT_HOSTS:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_HOSTS:-}}" ]; then
+    local old_ifs="$IFS"
+    IFS=","
+    for host in ${JARVIS_CODEX_CAPABILITY_PREFLIGHT_HOSTS:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_HOSTS:-}}; do
+      hosts+=("$host")
+    done
+    IFS="$old_ifs"
+  fi
+
+  for host in "${hosts[@]}"; do
+    if [ -z "$host" ]; then
+      continue
+    fi
+    seen=0
+    for existing in "${unique_hosts[@]}"; do
+      if [ "$existing" = "$host" ]; then
+        seen=1
+        break
+      fi
+    done
+    if [ "$seen" -eq 0 ]; then
+      unique_hosts+=("$host")
+    fi
+  done
+
+  host_list="${unique_hosts[*]}"
+
+  probe_prompt_file="$(mktemp "${PROJECT_DIR}/.jarvis-capability-prompt.XXXXXX")"
+  probe_last_message_file="$(mktemp "${PROJECT_DIR}/.jarvis-capability-last.XXXXXX")"
+  probe_stream_log_file="$(mktemp "${PROJECT_DIR}/.jarvis-capability-stream.XXXXXX")"
+
+  cat > "$probe_prompt_file" <<EOF
+Jarvis capability preflight. Do not edit project files.
+Run exactly one shell command and return only its raw stdout:
+
+\`\`\`bash
+bash -lc '
+echo CAPABILITY_PROBE_BEGIN
+GIT_DIR="\$(git rev-parse --git-dir 2>/dev/null || true)"
+if [ -n "\$GIT_DIR" ] && : > "\$GIT_DIR/.jarvis-capability-probe.\$\$" 2>/dev/null; then
+  rm -f "\$GIT_DIR/.jarvis-capability-probe.\$\$" 2>/dev/null || true
+  echo GIT_WRITE_OK
+else
+  echo GIT_WRITE_FAIL
+fi
+for host in $host_list; do
+  if curl -sS -I --max-time 8 "https://\$host" >/dev/null 2>&1; then
+    echo HOST_OK:\$host
+  else
+    echo HOST_FAIL:\$host
+  fi
+done
+echo CAPABILITY_PROBE_END
+'
+\`\`\`
+EOF
+
+  set +e
+  if [ -n "$CODEX_TIMEOUT_COMMAND" ] && [ "$timeout_seconds" -gt 0 ]; then
+    cat "$probe_prompt_file" \
+      | "$CODEX_TIMEOUT_COMMAND" "$timeout_seconds" "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$probe_last_message_file" - \
+      >"$probe_stream_log_file" 2>&1
+    cmd_status=${PIPESTATUS[1]}
+  else
+    cat "$probe_prompt_file" \
+      | "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$probe_last_message_file" - \
+      >"$probe_stream_log_file" 2>&1
+    cmd_status=${PIPESTATUS[1]}
+  fi
+  set -e
+
+  output="$(cat "$probe_last_message_file" 2>/dev/null || true)"
+  if [ -z "$(echo "$output" | tr -d '[:space:]')" ]; then
+    output="$(cat "$probe_stream_log_file" 2>/dev/null || true)"
+  fi
+
+  if [ "$cmd_status" -eq 124 ]; then
+    fail_reasons+=("capability_probe_timeout")
+  elif [ "$cmd_status" -ne 0 ]; then
+    fail_reasons+=("capability_probe_command_failed")
+  fi
+  if ! echo "$output" | grep -q "CAPABILITY_PROBE_BEGIN"; then
+    fail_reasons+=("capability_probe_no_markers")
+  fi
+  if echo "$output" | grep -q "GIT_WRITE_FAIL"; then
+    fail_reasons+=("git_write_unavailable_in_nested_codex")
+  fi
+
+  host_failures="$(echo "$output" | grep -oE "HOST_FAIL:[^[:space:]]+" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  if [ -n "$host_failures" ]; then
+    fail_reasons+=("nested_dns_or_https_unreachable:$host_failures")
+    if echo "$host_failures" | grep -q "HOST_FAIL:api.clickup.com"; then
+      disable_clickup_for_run "Codex capability preflight could not reach api.clickup.com."
+    fi
+  fi
+
+  rm -f "$probe_prompt_file" "$probe_last_message_file" "$probe_stream_log_file" 2>/dev/null || true
+
+  if [ "${#fail_reasons[@]}" -eq 0 ]; then
+    echo "Codex capability preflight passed (nested git/network checks)."
+    return 0
+  fi
+
+  echo "Codex capability preflight failed: ${fail_reasons[*]}" >&2
+  echo "Recovery: verify nested Codex sandbox/network capability; if unavailable, run with fallback/manual commit workflow." >&2
+
+  if [ "$strict_mode" = "1" ]; then
+    return 1
+  fi
+  echo "Warning: continuing despite capability preflight failure (JARVIS_CODEX_CAPABILITY_PREFLIGHT_STRICT=0)." >&2
   return 0
 }
 
@@ -1094,6 +1360,14 @@ if [ -n "${JARVIS_CODEX_ADD_DIRS:-${RALPH_CODEX_ADD_DIRS:-}}" ]; then
   IFS="$OLD_IFS"
 fi
 
+CODEX_TIMEOUT_COMMAND="$(detect_timeout_command)"
+if [ "$AGENT" = "codex" ] && [ -z "$CODEX_TIMEOUT_COMMAND" ]; then
+  requested_timeout="${JARVIS_CODEX_ITERATION_TIMEOUT_SECONDS:-${RALPH_CODEX_ITERATION_TIMEOUT_SECONDS:-1800}}"
+  if [ -n "$requested_timeout" ] && [ "$requested_timeout" -gt 0 ] 2>/dev/null; then
+    echo "Warning: Codex iteration timeout requested but no timeout binary was found (install 'timeout' or 'gtimeout')." >&2
+  fi
+fi
+
 # Prefer streaming output to the terminal when available; otherwise append to log.
 TEE_ARGS=()
 FOLLOW_LOG=""
@@ -1170,7 +1444,16 @@ clickup_prepare_context || true
 
 echo "Branch policy for this run: $BRANCH_POLICY (main branch: $MAIN_BRANCH)"
 if ! enforce_branch_policy_once; then
+  run_end_directives_sync_once
   exit 2
+fi
+
+if [ "$AGENT" = "codex" ]; then
+  if ! run_codex_effective_capability_preflight; then
+    report_runtime_error_feedback "preflight" "codex_capability_probe_failed" "error" "Nested Codex git/network capability preflight failed."
+    run_end_directives_sync_once
+    exit 2
+  fi
 fi
 
 # Archive previous run if branch changed
@@ -1244,8 +1527,12 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   PRE_RUN_STORY_SNAPSHOT_FILE=""
   LAST_MESSAGE_FILE=""
   STREAM_LOG_FILE=""
+  ITERATION_WORKTREE_WAS_CLEAN=0
   record_approval_queue_lines
   ITERATION_HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || true)"
+  if ! has_dirty_worktree; then
+    ITERATION_WORKTREE_WAS_CLEAN=1
+  fi
 
   if [ -n "$CURRENT_STORY_ID" ]; then
     CURRENT_STORY_TITLE="$(story_title "$CURRENT_STORY_ID")"
@@ -1268,6 +1555,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     report_runtime_error_feedback "preflight" "git_preflight_failed" "error" "Git preflight failed before story execution."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     emit_mutation_audit_summary
+    run_end_directives_sync_once
     exit 2
   fi
 
@@ -1277,6 +1565,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
       report_runtime_error_feedback "preflight" "codex_sandbox_expectation_failed" "error" "Configured expected sandbox does not match effective CODEX_GLOBAL_FLAGS."
       cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
       emit_mutation_audit_summary
+      run_end_directives_sync_once
       exit 2
     fi
   fi
@@ -1290,13 +1579,31 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
   # Run the selected agent with the Jarvis prompt
   if [ "$AGENT" = "codex" ]; then
+    CODEX_ITERATION_TIMEOUT_SECONDS="${JARVIS_CODEX_ITERATION_TIMEOUT_SECONDS:-${RALPH_CODEX_ITERATION_TIMEOUT_SECONDS:-1800}}"
     LAST_MESSAGE_FILE=$(mktemp "${PROJECT_DIR}/.codex-last-message.XXXXXX")
     STREAM_LOG_FILE=$(mktemp "${PROJECT_DIR}/.codex-stream-log.XXXXXX")
     set +e
-    cat "$ITERATION_PROMPT_FILE" | "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" "$STREAM_LOG_FILE" >/dev/null
+    if [ -n "$CODEX_TIMEOUT_COMMAND" ] && [ "$CODEX_ITERATION_TIMEOUT_SECONDS" -gt 0 ] 2>/dev/null; then
+      cat "$ITERATION_PROMPT_FILE" | "$CODEX_TIMEOUT_COMMAND" "$CODEX_ITERATION_TIMEOUT_SECONDS" "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" "$STREAM_LOG_FILE" >/dev/null
+    else
+      cat "$ITERATION_PROMPT_FILE" | "$CODEX_BIN" $CODEX_GLOBAL_FLAGS exec $CODEX_FLAGS --output-last-message "$LAST_MESSAGE_FILE" - 2>&1 | tee "${TEE_ARGS[@]}" "$STREAM_LOG_FILE" >/dev/null
+    fi
     CODEX_CMD_STATUS=${PIPESTATUS[1]}
     set -e
     OUTPUT=$(cat "$LAST_MESSAGE_FILE" 2>/dev/null || true)
+    if [ -z "$(echo "$OUTPUT" | tr -d '[:space:]')" ]; then
+      OUTPUT="$(cat "$STREAM_LOG_FILE" 2>/dev/null || true)"
+    fi
+    if [ "$CODEX_CMD_STATUS" -eq 124 ]; then
+      CODEX_TIMEOUT_FAILURE_STREAK=$((CODEX_TIMEOUT_FAILURE_STREAK + 1))
+      echo ""
+      echo "Jarvis timed out Codex iteration after ${CODEX_ITERATION_TIMEOUT_SECONDS}s (streak: ${CODEX_TIMEOUT_FAILURE_STREAK})."
+      report_runtime_error_feedback "agent-run" "codex_iteration_timeout" "warning" "Codex iteration exceeded timeout while running pinned story."
+      cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+      sleep 2
+      continue
+    fi
+    CODEX_TIMEOUT_FAILURE_STREAK=0
     if codex_stream_disconnect_retryable "$STREAM_LOG_FILE" "$CODEX_CMD_STATUS" "$OUTPUT"; then
       CODEX_STREAM_FAILURE_STREAK=$((CODEX_STREAM_FAILURE_STREAK + 1))
       echo ""
@@ -1322,25 +1629,70 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     report_runtime_error_feedback "launch" "unknown_agent" "error" "Unsupported JARVIS_AGENT value."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     emit_mutation_audit_summary
+    run_end_directives_sync_once
     exit 2
   fi
 
   if [ -n "$CURRENT_STORY_ID" ] && [ -n "$PRE_RUN_STORY_SNAPSHOT_FILE" ]; then
     NON_TARGET_MUTATIONS_JSON="$(describe_non_target_story_mutations "$CURRENT_STORY_ID" "$PRE_RUN_STORY_SNAPSHOT_FILE")"
     if [ "$NON_TARGET_MUTATIONS_JSON" != "[]" ]; then
+      NON_TARGET_MUTATION_POLICY="${JARVIS_PINNED_SCOPE_MUTATION_POLICY:-${RALPH_PINNED_SCOPE_MUTATION_POLICY:-rollback}}"
       echo "Warning: detected non-target PRD story mutations in iteration $i (pinned story: $CURRENT_STORY_ID)."
       printf '[%s] iteration=%s pinned_story=%s mutations=%s\n' \
         "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
         "$i" \
         "$CURRENT_STORY_ID" \
         "$NON_TARGET_MUTATIONS_JSON" >> "$MUTATION_AUDIT_FILE"
-      report_runtime_error_feedback "guard" "single_story_scope_mutation_audited" "warning" "Detected non-target story changes during pinned iteration (audit mode)."
+      case "$NON_TARGET_MUTATION_POLICY" in
+        fail)
+          report_runtime_error_feedback "guard" "single_story_scope_violation" "error" "Detected non-target story changes during pinned iteration."
+          cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+          emit_mutation_audit_summary
+          run_end_directives_sync_once
+          exit 2
+          ;;
+        rollback)
+          restore_non_target_story_mutations "$CURRENT_STORY_ID" "$PRE_RUN_STORY_SNAPSHOT_FILE"
+          report_runtime_error_feedback "guard" "single_story_scope_mutation_rolled_back" "warning" "Detected non-target story changes during pinned iteration and restored original state."
+          ;;
+        *)
+          report_runtime_error_feedback "guard" "single_story_scope_mutation_audited" "warning" "Detected non-target story changes during pinned iteration (audit mode)."
+          ;;
+      esac
     fi
   fi
 
   ITERATION_HEAD_AFTER="$(git rev-parse HEAD 2>/dev/null || true)"
   if [ -n "$ITERATION_HEAD_BEFORE" ] && [ -n "$ITERATION_HEAD_AFTER" ] && [ "$ITERATION_HEAD_BEFORE" != "$ITERATION_HEAD_AFTER" ]; then
     run_clickup_directives_sync "post-commit"
+  fi
+
+  if output_has_clickup_dns_failure "$OUTPUT" && [ "$CLICKUP_RUNTIME_DISABLED" != "1" ]; then
+    disable_clickup_for_run "Nested Codex DNS could not resolve api.clickup.com; skipping ClickUp actions for the remainder of this run."
+    report_runtime_error_feedback "infra" "clickup_dns_unreachable_in_nested_codex" "warning" "Detected ClickUp DNS resolution failures in nested Codex output."
+  fi
+  if output_has_dns_failure "$OUTPUT"; then
+    report_runtime_error_feedback "infra" "nested_dns_resolution_failure" "warning" "Detected DNS resolution failures inside nested Codex run."
+  fi
+
+  if [ -n "$CURRENT_STORY_ID" ] \
+    && [ -n "$ITERATION_HEAD_BEFORE" ] \
+    && [ -n "$ITERATION_HEAD_AFTER" ] \
+    && [ "$ITERATION_HEAD_BEFORE" = "$ITERATION_HEAD_AFTER" ] \
+    && story_passes "$CURRENT_STORY_ID" \
+    && has_dirty_worktree \
+    && output_has_git_lock_permission_error "$OUTPUT"; then
+    if run_git_commit_recovery "$CURRENT_STORY_ID" "$ITERATION_WORKTREE_WAS_CLEAN"; then
+      run_clickup_directives_sync "post-recovery-commit"
+      if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then
+        COMPLETION_STATUS_AUTO="$(clickup_completion_status)"
+        clickup_api_put_status "$CURRENT_TASK_ID" "$COMPLETION_STATUS_AUTO" || true
+      fi
+      echo "Jarvis recovered commit for $CURRENT_STORY_ID after nested git lock permission failure."
+      cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+      sleep 2
+      continue
+    fi
   fi
   
   # Check for completion signal
@@ -1352,6 +1704,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     report_runtime_error_feedback "agent-run" "read_only_sandbox_detected" "error" "Codex reported read-only sandbox during project iteration."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     emit_mutation_audit_summary
+    run_end_directives_sync_once
     exit 2
   fi
 
@@ -1361,6 +1714,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "Completed at iteration $i of $MAX_ITERATIONS"
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     emit_mutation_audit_summary
+    run_end_directives_sync_once
     exit 0
   fi
 
@@ -1394,7 +1748,7 @@ Reason:
     fi
 
     if [ -n "$CURRENT_STORY_ID" ]; then
-      if run_git_commit_recovery "$CURRENT_STORY_ID"; then
+      if run_git_commit_recovery "$CURRENT_STORY_ID" "$ITERATION_WORKTREE_WAS_CLEAN"; then
         RECOVERED=1
         if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then
           clickup_api_put_status "$CURRENT_TASK_ID" "$COMPLETION_STATUS" || true
@@ -1473,4 +1827,5 @@ echo "Jarvis reached max iterations ($MAX_ITERATIONS) without completing all tas
 echo "Check $PROGRESS_FILE for status."
 report_runtime_error_feedback "run" "max_iterations_reached" "warning" "Run ended without completion."
 emit_mutation_audit_summary
+run_end_directives_sync_once
 exit 1

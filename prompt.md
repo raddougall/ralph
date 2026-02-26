@@ -82,6 +82,7 @@ Required behavior per story:
 10. Link related tasks when work has dependency/traceability context (for example, bug <-> originating user story).
 11. Bugs must use ClickUp task type `bug` (not story/task type), include repro details, and link back to the related `[US-xxx]` story task.
 12. Move the story task to `testing` when it is ready for manual validation.
+13. If ClickUp/network calls fail with DNS resolution errors, do not loop diagnostics: record one concise note, then continue the story implementation/test flow using local files.
 
 Use these activity comment templates:
 - `Kickoff:` `[Jarvis/Codex][US-xxx][start]` + `Plan:` + `Scope/Assumptions:`
@@ -97,6 +98,8 @@ If ClickUp config is missing, continue normal implementation and explicitly repo
 - Leave short-lived local session notes uncommitted by default (especially files matched by `.gitignore`); only commit notes intended as durable project documentation.
 - Do not block waiting for interactive approval prompts. Jarvis runs unattended.
 - Git commands within the active project repo are allowed and should be attempted normally.
+- During pinned story execution, avoid repeated context-walk diagnostics (ClickUp/env/wrapper audits). Keep infra checks to a single attempt unless the story explicitly targets tooling/infrastructure.
+- Do not edit `scripts/jarvis/*`, `scripts/clickup/*`, or env example files unless the pinned story explicitly requires tooling changes.
 - If a required command cannot run without manual approval (or host-level access), do all of the following:
   1. Append an entry to `JARVIS_APPROVAL_QUEUE_FILE` (or `./approval-queue.txt`) with timestamp, story id, exact command, reason, and fallback attempted.
   2. Mark that story `notes` with prefix `BLOCKED:` plus a short reason and queue-file reference.
