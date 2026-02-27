@@ -37,6 +37,7 @@ CODEX_TIMEOUT_COMMAND=""
 CLICKUP_RUNTIME_DISABLED=0
 CLICKUP_RUNTIME_DISABLE_REASON=""
 DIRECTIVES_SYNC_RUN_END_DONE=0
+BOOTSTRAP_NON_RUNTIME_FINGERPRINT="clean"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${JARVIS_PROJECT_DIR:-${RALPH_PROJECT_DIR:-$(pwd)}}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -864,6 +865,49 @@ has_non_runtime_dirty_worktree() {
   return 1
 }
 
+non_runtime_dirty_fingerprint() {
+  local path
+  local status
+  local content_sig
+
+  if ! has_non_runtime_dirty_worktree; then
+    echo "clean"
+    return 0
+  fi
+
+  while IFS= read -r path; do
+    status="$(git status --porcelain -- "$path" 2>/dev/null | head -n 1 | cut -c1-2)"
+    if [ -L "$path" ]; then
+      content_sig="symlink:$(readlink "$path" 2>/dev/null || echo "?")"
+    elif [ -f "$path" ]; then
+      content_sig="$(cksum < "$path" | awk '{print $1 ":" $2}')"
+    elif [ -d "$path" ]; then
+      content_sig="dir"
+    else
+      content_sig="missing"
+    fi
+    printf '%s|%s|%s\n' "${status:-??}" "$path" "$content_sig"
+  done < <(collect_non_runtime_dirty_paths) \
+    | sort \
+    | cksum \
+    | awk '{print $1 ":" $2}'
+}
+
+has_non_runtime_dirty_worktree_since_baseline() {
+  local baseline_fingerprint="${1:-clean}"
+  local current_fingerprint
+
+  if ! has_non_runtime_dirty_worktree; then
+    return 1
+  fi
+
+  current_fingerprint="$(non_runtime_dirty_fingerprint)"
+  if [ "$current_fingerprint" = "$baseline_fingerprint" ]; then
+    return 1
+  fi
+  return 0
+}
+
 run_end_directives_sync_once() {
   if [ "$DIRECTIVES_SYNC_RUN_END_DONE" = "1" ]; then
     return 0
@@ -1531,12 +1575,21 @@ if [ -n "${JARVIS_DEBUG_ENV:-${RALPH_DEBUG_ENV:-}}" ]; then
   } >> "$LOG_FILE" 2>&1
 fi
 
+if [ "$COMMIT_MODE" = "runner" ] && [ "$RUNNER_COMMIT_REQUIRE_CLEAN_START" = "1" ] && has_non_runtime_dirty_worktree; then
+  echo "Jarvis runner commit mode requires a clean non-runtime worktree before bootstrap sync." >&2
+  echo "Recovery: commit/stash existing local changes, or set JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START=0 (less isolation)." >&2
+  report_runtime_error_feedback "preflight" "runner_commit_requires_clean_worktree" "error" "Runner commit mode stopped before bootstrap due to dirty non-runtime worktree."
+  run_end_directives_sync_once
+  exit 2
+fi
+
 load_project_clickup_env
 run_network_preflight
 run_project_launcher_sync
 run_clickup_prd_pull_sync
 run_clickup_directives_sync "run-start"
 clickup_prepare_context || true
+BOOTSTRAP_NON_RUNTIME_FINGERPRINT="$(non_runtime_dirty_fingerprint)"
 
 echo "Branch policy for this run: $BRANCH_POLICY (main branch: $MAIN_BRANCH)"
 echo "Commit mode for this run: $COMMIT_MODE (clean-start required: $RUNNER_COMMIT_REQUIRE_CLEAN_START)"
@@ -1627,14 +1680,14 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   ITERATION_WORKTREE_WAS_CLEAN=0
   record_approval_queue_lines
   ITERATION_HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || true)"
-  if ! has_non_runtime_dirty_worktree; then
+  if ! has_non_runtime_dirty_worktree_since_baseline "$BOOTSTRAP_NON_RUNTIME_FINGERPRINT"; then
     ITERATION_WORKTREE_WAS_CLEAN=1
   fi
   if [ "$COMMIT_MODE" = "runner" ] && [ "$RUNNER_COMMIT_REQUIRE_CLEAN_START" = "1" ] && [ "$ITERATION_WORKTREE_WAS_CLEAN" != "1" ]; then
     echo ""
-    echo "Jarvis runner commit mode requires a clean worktree at iteration start."
-    echo "Recovery: commit/stash existing local changes, or set JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START=0 (less isolation)."
-    report_runtime_error_feedback "preflight" "runner_commit_requires_clean_worktree" "error" "Runner commit mode stopped to avoid cross-story commit mixing in dirty worktree."
+    echo "Jarvis runner commit mode detected non-runtime changes beyond bootstrap baseline at iteration start."
+    echo "Recovery: commit/stash those changes, or set JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START=0 (less isolation)."
+    report_runtime_error_feedback "preflight" "runner_commit_requires_clean_worktree" "error" "Runner commit mode stopped to avoid cross-story commit mixing in dirty worktree beyond bootstrap baseline."
     cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
     emit_mutation_audit_summary
     run_end_directives_sync_once
