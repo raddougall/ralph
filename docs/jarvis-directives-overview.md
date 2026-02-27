@@ -27,6 +27,8 @@ This document summarizes the runtime directives Jarvis follows during autonomous
 - Commit durable story artifacts and project changes needed long term.
 - Do not force-add local scratch/session notes by default (especially `.gitignore`d files).
 - Keep unrelated local changes intact; do not revert user work.
+- Default commit ownership is runner-side (`JARVIS_COMMIT_MODE=runner`) to avoid nested sandbox commit failures.
+- Runner commit mode enforces commit gating for passing stories and can require clean iteration start (`JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START=1`) for strict story isolation.
 
 ## ClickUp Workflow
 

@@ -57,6 +57,8 @@ npm run dev
 - Codex iterations are timeout-bounded by default (`JARVIS_CODEX_ITERATION_TIMEOUT_SECONDS`, default `1800`) when `timeout`/`gtimeout` is available, so long context-walk stalls cannot run indefinitely.
 - Network preflight for Codex also validates npm registry reachability by default (`registry.npmjs.org`) to catch package-install blockers before story execution.
 - If nested runs cannot resolve ClickUp DNS, Jarvis disables ClickUp actions for the rest of the run instead of repeatedly retrying wrapper/env diagnostics.
+- Default commit flow is runner-owned (`JARVIS_COMMIT_MODE=runner`) so Jarvis parent creates the story commit; `agent` mode remains available for direct child commits.
+- Runner commit mode supports strict isolation guard (`JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START=1`) to prevent story mixing when worktree is already dirty.
 - Story scheduling should treat planning markers as non-executable (`planning: true`, `skip: true`, or `clickupStatus: "planning"`), and ClickUp sync should honor per-story `clickupStatus` before `passes` mapping.
 - Host package manager commands are guarded through `guard-bin/`; leave `JARVIS_ALLOW_SYSTEM_CHANGES=0` (legacy `RALPH_ALLOW_SYSTEM_CHANGES`) unless the user explicitly approves system changes.
 - Projects synced with the launcher include a `scripts/jarvis/house-party-protocol.sh` preset for Codex full-access runs (`danger-full-access`, network enabled, `-a never`).

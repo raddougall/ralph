@@ -12,6 +12,8 @@ CODEX_FLAGS=${JARVIS_CODEX_FLAGS:-${RALPH_CODEX_FLAGS:---color never}}
 CODEX_BIN=${JARVIS_CODEX_BIN:-${RALPH_CODEX_BIN:-codex}}
 BRANCH_POLICY_RAW=${JARVIS_BRANCH_POLICY:-${RALPH_BRANCH_POLICY:-prd}}
 MAIN_BRANCH=${JARVIS_MAIN_BRANCH:-${RALPH_MAIN_BRANCH:-main}}
+COMMIT_MODE_RAW=${JARVIS_COMMIT_MODE:-${RALPH_COMMIT_MODE:-runner}}
+RUNNER_COMMIT_REQUIRE_CLEAN_START=${JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START:-${RALPH_RUNNER_COMMIT_REQUIRE_CLEAN_START:-1}}
 CLICKUP_STATUS_IN_PROGRESS=${CLICKUP_STATUS_IN_PROGRESS:-in progress}
 CLICKUP_STATUS_DONE=${CLICKUP_STATUS_DONE:-done}
 CLICKUP_STATUS_TESTING=${CLICKUP_STATUS_TESTING:-testing}
@@ -74,6 +76,16 @@ case "$BRANCH_POLICY_RAW" in
     ;;
   *)
     echo "Invalid JARVIS_BRANCH_POLICY='$BRANCH_POLICY_RAW' (expected: prd, main, current)" >&2
+    exit 2
+    ;;
+esac
+
+case "$COMMIT_MODE_RAW" in
+  runner|agent)
+    COMMIT_MODE="$COMMIT_MODE_RAW"
+    ;;
+  *)
+    echo "Invalid JARVIS_COMMIT_MODE='$COMMIT_MODE_RAW' (expected: runner, agent)" >&2
     exit 2
     ;;
 esac
@@ -439,6 +451,10 @@ build_iteration_prompt_file() {
     echo "Bound infrastructure diagnostics to one attempt each (ClickUp sync/network check) unless this story explicitly targets Jarvis/ClickUp/tooling."
     echo "If ClickUp DNS fails, log one warning and continue story implementation/tests without repeated wrapper/env investigation."
     echo "Do not edit scripts/jarvis/*, scripts/clickup/*, or env example files unless the pinned story explicitly requires tooling changes."
+    if [ "$COMMIT_MODE" = "runner" ]; then
+      echo "Commit mode is runner-owned. Do not run git add/git commit in this iteration."
+      echo "Prepare changes + tests + PRD/progress updates; Jarvis runner will create the commit."
+    fi
   } >> "$output_file"
 }
 
@@ -599,6 +615,53 @@ new_approval_queue_entries_for_story() {
   fi
 
   tail -n "+$((APPROVAL_QUEUE_BEFORE_LINES + 1))" "$APPROVAL_QUEUE_FILE"     | grep -E "(\[$story_id\]|story=$story_id)" || true
+}
+
+build_story_commit_message() {
+  local story_id="$1"
+  local task_id="${2:-}"
+  local title=""
+  local message=""
+
+  title="$(story_title "$story_id")"
+  if [ -z "$title" ]; then
+    title="Story update"
+  fi
+
+  message="feat: [$story_id] - $title"
+  if [ -n "$task_id" ]; then
+    message="$message | ClickUp: $task_id"
+  fi
+  echo "$message"
+}
+
+run_runner_story_commit() {
+  local story_id="$1"
+  local task_id="${2:-}"
+  local commit_message=""
+  local dirty_paths=()
+
+  while IFS= read -r path; do
+    dirty_paths+=("$path")
+  done < <(collect_non_runtime_dirty_paths)
+  if [ "${#dirty_paths[@]}" -eq 0 ]; then
+    return 2
+  fi
+
+  if ! git add -- "${dirty_paths[@]}"; then
+    return 1
+  fi
+
+  if git diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
+    return 2
+  fi
+
+  commit_message="$(build_story_commit_message "$story_id" "$task_id")"
+  if ! git commit -m "$commit_message"; then
+    return 1
+  fi
+
+  return 0
 }
 
 extract_recovery_commit_command() {
@@ -763,6 +826,39 @@ has_dirty_worktree() {
     return 0
   fi
   if [ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]; then
+    return 0
+  fi
+  return 1
+}
+
+is_runtime_generated_path() {
+  local path="$1"
+  case "$path" in
+    .jarvis/*|.codex/*|jarvis.log|approval-queue.txt|.codex-last-message.*|.codex-stream-log.*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+collect_non_runtime_dirty_paths() {
+  local path
+
+  {
+    git diff --name-only -- 2>/dev/null || true
+    git diff --cached --name-only -- 2>/dev/null || true
+    git ls-files --others --exclude-standard 2>/dev/null || true
+  } | awk 'NF' | sort -u | while IFS= read -r path; do
+    if ! is_runtime_generated_path "$path"; then
+      echo "$path"
+    fi
+  done
+}
+
+has_non_runtime_dirty_worktree() {
+  if [ -n "$(collect_non_runtime_dirty_paths)" ]; then
     return 0
   fi
   return 1
@@ -1443,6 +1539,7 @@ run_clickup_directives_sync "run-start"
 clickup_prepare_context || true
 
 echo "Branch policy for this run: $BRANCH_POLICY (main branch: $MAIN_BRANCH)"
+echo "Commit mode for this run: $COMMIT_MODE (clean-start required: $RUNNER_COMMIT_REQUIRE_CLEAN_START)"
 if ! enforce_branch_policy_once; then
   run_end_directives_sync_once
   exit 2
@@ -1530,8 +1627,18 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   ITERATION_WORKTREE_WAS_CLEAN=0
   record_approval_queue_lines
   ITERATION_HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || true)"
-  if ! has_dirty_worktree; then
+  if ! has_non_runtime_dirty_worktree; then
     ITERATION_WORKTREE_WAS_CLEAN=1
+  fi
+  if [ "$COMMIT_MODE" = "runner" ] && [ "$RUNNER_COMMIT_REQUIRE_CLEAN_START" = "1" ] && [ "$ITERATION_WORKTREE_WAS_CLEAN" != "1" ]; then
+    echo ""
+    echo "Jarvis runner commit mode requires a clean worktree at iteration start."
+    echo "Recovery: commit/stash existing local changes, or set JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START=0 (less isolation)."
+    report_runtime_error_feedback "preflight" "runner_commit_requires_clean_worktree" "error" "Runner commit mode stopped to avoid cross-story commit mixing in dirty worktree."
+    cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+    emit_mutation_audit_summary
+    run_end_directives_sync_once
+    exit 2
   fi
 
   if [ -n "$CURRENT_STORY_ID" ]; then
@@ -1679,8 +1786,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     && [ -n "$ITERATION_HEAD_BEFORE" ] \
     && [ -n "$ITERATION_HEAD_AFTER" ] \
     && [ "$ITERATION_HEAD_BEFORE" = "$ITERATION_HEAD_AFTER" ] \
+    && [ "$COMMIT_MODE" != "runner" ] \
     && story_passes "$CURRENT_STORY_ID" \
-    && has_dirty_worktree \
+    && has_non_runtime_dirty_worktree \
     && output_has_git_lock_permission_error "$OUTPUT"; then
     if run_git_commit_recovery "$CURRENT_STORY_ID" "$ITERATION_WORKTREE_WAS_CLEAN"; then
       run_clickup_directives_sync "post-recovery-commit"
@@ -1706,6 +1814,50 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     emit_mutation_audit_summary
     run_end_directives_sync_once
     exit 2
+  fi
+
+  if [ "$COMMIT_MODE" = "runner" ] \
+    && [ -n "$CURRENT_STORY_ID" ] \
+    && story_passes "$CURRENT_STORY_ID" \
+    && ! output_requests_user_input "$OUTPUT" \
+    && ! echo "$OUTPUT" | grep -q "<promise>BLOCKED</promise>"; then
+    if has_non_runtime_dirty_worktree; then
+      set +e
+      run_runner_story_commit "$CURRENT_STORY_ID" "$CURRENT_TASK_ID"
+      RUNNER_COMMIT_STATUS=$?
+      set -e
+
+      if [ "$RUNNER_COMMIT_STATUS" -eq 0 ]; then
+        ITERATION_HEAD_AFTER="$(git rev-parse HEAD 2>/dev/null || true)"
+        run_clickup_directives_sync "post-runner-commit"
+      elif [ "$RUNNER_COMMIT_STATUS" -ne 2 ]; then
+        COMMIT_GATE_REASON="Runner commit failed; story was not advanced to preserve isolation."
+        mark_story_blocked "$CURRENT_STORY_ID" "$COMMIT_GATE_REASON" || true
+        if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then
+          clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_WAITING" || true
+          clickup_api_post_comment "$CURRENT_TASK_ID" "[$CLICKUP_COMMENT_AUTHOR_LABEL][$CURRENT_STORY_ID][waiting]
+Outcome:
+- Runner-owned commit failed; iteration halted to avoid cross-story mixing.
+Reason:
+- ${COMMIT_GATE_REASON}" || true
+        fi
+        report_runtime_error_feedback "commit-gate" "runner_commit_failed" "error" "Runner commit mode failed to create commit for passing story."
+        cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+        emit_mutation_audit_summary
+        run_end_directives_sync_once
+        exit 2
+      fi
+    fi
+
+    if has_non_runtime_dirty_worktree; then
+      COMMIT_GATE_REASON="Runner commit gate found remaining uncommitted changes after story pass."
+      mark_story_blocked "$CURRENT_STORY_ID" "$COMMIT_GATE_REASON" || true
+      report_runtime_error_feedback "commit-gate" "runner_commit_gate_dirty_worktree" "error" "Uncommitted changes remained after runner commit gate."
+      cleanup_iteration_temp_files "$ITERATION_PROMPT_FILE" "$PRE_RUN_STORY_SNAPSHOT_FILE" "$LAST_MESSAGE_FILE" "$STREAM_LOG_FILE"
+      emit_mutation_audit_summary
+      run_end_directives_sync_once
+      exit 2
+    fi
   fi
 
   if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
@@ -1747,7 +1899,7 @@ Reason:
       COMPLETION_PHASE="deployed"
     fi
 
-    if [ -n "$CURRENT_STORY_ID" ]; then
+    if [ -n "$CURRENT_STORY_ID" ] && [ "$COMMIT_MODE" != "runner" ]; then
       if run_git_commit_recovery "$CURRENT_STORY_ID" "$ITERATION_WORKTREE_WAS_CLEAN"; then
         RECOVERED=1
         if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ]; then

@@ -199,6 +199,8 @@ Project scoping controls:
 - `JARVIS_CODEX_CAPABILITY_PREFLIGHT_TIMEOUT_SECONDS` (default: `180`, timeout for nested capability probe command)
 - `JARVIS_CODEX_ITERATION_TIMEOUT_SECONDS` (default: `1800`, timeout for each Codex iteration when `timeout`/`gtimeout` is available)
 - `JARVIS_PINNED_SCOPE_MUTATION_POLICY` (default: `rollback`; options: `rollback`, `audit`, `fail` for non-target `prd.json` story mutations)
+- `JARVIS_COMMIT_MODE` (default: `runner`; `runner` = parent Jarvis creates commits, `agent` = child agent commits)
+- `JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START` (default: `1`; fail-fast in runner mode when iteration starts dirty to avoid cross-story commit mixing)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default: `0`; when enabled, updates a ClickUp Doc with a human-readable Jarvis directives overview at run start)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default: `0`; set `1` to fail-fast if directives sync fails)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY` (default: `main_only`; keep docs clean by syncing only on `JARVIS_MAIN_BRANCH`)
@@ -217,6 +219,7 @@ Safety defaults:
 - Read-only behavior is intended for paths outside `JARVIS_PROJECT_DIR`, not for the project root itself.
 - Localhost smoke testing is allowed, but any temporary local servers must be stopped before the run completes.
 - If nested Codex DNS cannot resolve ClickUp, Jarvis disables ClickUp actions for the remainder of that run instead of repeatedly retrying.
+- In `JARVIS_COMMIT_MODE=runner`, Jarvis enforces commit gating for passed stories and stops if it cannot produce a clean committed state.
 
 Jarvis will:
 1. Apply branch policy:

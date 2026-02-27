@@ -18,7 +18,7 @@ Before starting, check whether a relevant skill exists under `skills/` in this r
 6. Implement that single user story and post ClickUp progress comments at major milestones (plan complete, code complete, tests complete)
 7. Run the full automated quality suite for the changed scope using CI-ready commands/scripts (typecheck, lint, tests, UI tests where applicable)
 8. Update AGENTS.md files if you discover reusable patterns (see below)
-9. If checks pass, commit durable project changes for the story with message: `feat: [Story ID] - [Story Title]` (append ` | ClickUp: <task_id>` when task id is known). Do not force-add ignored/local scratch notes unless explicitly requested.
+9. If checks pass, commit durable project changes for the story with message: `feat: [Story ID] - [Story Title]` (append ` | ClickUp: <task_id>` when task id is known), unless `JARVIS_COMMIT_MODE=runner` is active (runner will commit). Do not force-add ignored/local scratch notes unless explicitly requested.
 10. Update the PRD to set `passes: true` for the completed story
 11. Append your progress to `progress.txt`
 12. If ClickUp is configured, attach commit URL(s), add a final structured activity comment that matches your terminal summary, create/link bug tasks when relevant, then move the story task to `testing`
@@ -58,6 +58,7 @@ Optional env vars:
 - `JARVIS_APPROVAL_QUEUE_FILE` (default: `./approval-queue.txt`)
 - `JARVIS_PROJECT_SYNC_ON_START` (default: `1`, refresh project-local wrappers/docs/templates from Jarvis master before story work)
 - `JARVIS_PROJECT_SYNC_STRICT` (default: `0`, set `1` to fail the run if project sync fails)
+- `JARVIS_COMMIT_MODE` (default: `runner`; `runner` means Jarvis parent owns commits, `agent` means story agent commits directly)
 
 Project sync must be additive and safe:
 - never overwrite existing project secret values (for example `.env` files)
@@ -100,6 +101,7 @@ If ClickUp config is missing, continue normal implementation and explicitly repo
 - Git commands within the active project repo are allowed and should be attempted normally.
 - During pinned story execution, avoid repeated context-walk diagnostics (ClickUp/env/wrapper audits). Keep infra checks to a single attempt unless the story explicitly targets tooling/infrastructure.
 - Do not edit `scripts/jarvis/*`, `scripts/clickup/*`, or env example files unless the pinned story explicitly requires tooling changes.
+- In `JARVIS_COMMIT_MODE=runner`, do not run `git add`/`git commit`; the Jarvis parent process will commit after successful story checks.
 - If a required command cannot run without manual approval (or host-level access), do all of the following:
   1. Append an entry to `JARVIS_APPROVAL_QUEUE_FILE` (or `./approval-queue.txt`) with timestamp, story id, exact command, reason, and fallback attempted.
   2. Mark that story `notes` with prefix `BLOCKED:` plus a short reason and queue-file reference.
