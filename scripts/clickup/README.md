@@ -161,3 +161,75 @@ CLICKUP_LIST_ID=456 \
 DRY_RUN=1 \
 ./scripts/clickup/sync_clickup_to_prd.sh
 ```
+
+## 5) Calibrate Codex effort fields every 3 stories
+
+Use `codex_allowance_calibrate.sh` to convert story effort minutes into approximate `%` values in your ClickUp custom fields (`Codex 5-hour`, `Codex Weekly`, `Codex Window`) using real `%` consumption samples from your own account.
+
+This avoids hard-coding limits and recalibrates from observed usage.
+
+### Files
+
+- Calibration samples CSV (default): `./.codex/codex_allowance_samples.csv`
+- Story estimate CSV (default): `./.codex/codex_story_estimates.csv`
+
+### Record a completed story sample
+
+```bash
+set -a
+source scripts/clickup/.env.clickup
+set +a
+
+./scripts/clickup/codex_allowance_calibrate.sh record \
+  --story US-063 \
+  --minutes 45 \
+  --five-before 82 \
+  --five-after 78 \
+  --weekly-before 66 \
+  --weekly-after 65
+```
+
+Run this after each completed story. The script computes capacities from the latest 3 samples by default (`CALIBRATION_SAMPLE_SIZE=3`).
+
+Auto-run mode (recommended):
+
+```bash
+CODEX_AUTO_APPLY_ON_RECORD=1 CODEX_AUTO_APPLY_EVERY=3 ./scripts/clickup/codex_allowance_calibrate.sh record   --story US-063   --minutes 45   --five-before 82   --five-after 78   --weekly-before 66   --weekly-after 65
+```
+
+When enabled, `record` triggers `apply` automatically whenever sample count reaches a multiple of `CODEX_AUTO_APPLY_EVERY`.
+
+`apply` writes:
+- `Codex 5-hour`: approximate percent of your 5-hour allowance
+- `Codex Weekly`: approximate percent of your weekly allowance
+- `Codex Window`: scheduling bucket
+- Task description summary block with both P80 minutes and calibrated percentages
+
+### Recalculate capacities manually
+
+```bash
+./scripts/clickup/codex_allowance_calibrate.sh recalc
+```
+
+### Apply calibrated values to ClickUp fields
+
+```bash
+set -a
+source scripts/clickup/.env.clickup
+set +a
+
+./scripts/clickup/codex_allowance_calibrate.sh apply
+```
+
+Optional:
+
+- `DRY_RUN=1` to preview updates only
+- `CODEX_WINDOW_NOW_THRESHOLD_PCT` (default `35`)
+- `CODEX_WINDOW_WEEKLY_THRESHOLD_PCT` (default `35`)
+- `CALIBRATION_SAMPLE_SIZE` (default `3`)
+
+Expected custom field names (override via env if needed):
+
+- `Codex 5-hour` (number)
+- `Codex Weekly` (number)
+- `Codex Window` (drop down: `5h-Now`, `Weekly`, `Later`)
