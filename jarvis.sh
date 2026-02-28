@@ -267,6 +267,35 @@ clickup_api_post_comment() {
   jq -n --arg comment_text "$comment" '{comment_text:$comment_text, notify_all:false}'     | curl -sS -X POST "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}/task/$task_id/comment"       -H "$CLICKUP_AUTH_HEADER"       -H "Content-Type: application/json"       --data-binary @- >/dev/null
 }
 
+clickup_story_output_excerpt() {
+  local output="$1"
+  local max_chars="${JARVIS_CLICKUP_COMMENT_OUTPUT_MAX_CHARS:-1600}"
+  local excerpt
+
+  excerpt="$(printf '%s' "$output" | sed -E 's/\x1b\[[0-9;]*[[:alpha:]]//g' | tail -n 40)"
+  if [ ${#excerpt} -gt "$max_chars" ]; then
+    excerpt="${excerpt:0:$max_chars}
+..."
+  fi
+  echo "$excerpt"
+}
+
+clickup_post_story_comment() {
+  local task_id="$1"
+  local phase="$2"
+  local body="$3"
+  local story_id="${CURRENT_STORY_ID:-unknown}"
+  local comment="[$CLICKUP_COMMENT_AUTHOR_LABEL][$story_id][$phase]
+$body"
+
+  if ! clickup_api_post_comment "$task_id" "$comment"; then
+    echo "Warning: failed to post ClickUp comment ($phase) for $story_id task $task_id." >&2
+    report_runtime_error_feedback "clickup" "clickup_comment_post_failed" "warning" "Failed to post ClickUp $phase comment."
+    return 1
+  fi
+  return 0
+}
+
 clickup_completion_status() {
   local current_branch=""
   current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
@@ -1770,6 +1799,13 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     CURRENT_TASK_ID="$(clickup_find_task_id_for_story "$CURRENT_STORY_ID" || true)"
     if [ -n "$CURRENT_TASK_ID" ]; then
       clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_IN_PROGRESS" || true
+      CURRENT_BRANCH_NAME="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+      clickup_post_story_comment "$CURRENT_TASK_ID" "start" "Plan:
+- Implement ONLY $CURRENT_STORY_ID (${CURRENT_STORY_TITLE:-unknown}).
+- Run automated checks for changed scope.
+- Apply Jarvis guardrails and commit gate (mode: $COMMIT_MODE).
+Scope/Assumptions:
+- Iteration $i/$MAX_ITERATIONS on branch ${CURRENT_BRANCH_NAME:-unknown}." || true
     fi
   fi
 
@@ -1827,6 +1863,16 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     emit_mutation_audit_summary
     run_end_directives_sync_once
     exit 2
+  fi
+
+  if clickup_is_ready && [ -n "$CURRENT_TASK_ID" ] && [ -n "$CURRENT_STORY_ID" ]; then
+    PROGRESS_EXCERPT="$(clickup_story_output_excerpt "$OUTPUT")"
+    clickup_post_story_comment "$CURRENT_TASK_ID" "progress" "Now:
+- Iteration execution completed for pinned story $CURRENT_STORY_ID.
+Next:
+- Applying scope guardrails, quality/commit checks, then final status transition.
+Notes:
+$PROGRESS_EXCERPT" || true
   fi
 
   if [ -n "$CURRENT_STORY_ID" ] && [ -n "$PRE_RUN_STORY_SNAPSHOT_FILE" ]; then
@@ -2056,7 +2102,26 @@ Reason:
   
   if clickup_is_ready && [ -n "$CURRENT_STORY_ID" ] && [ -n "$CURRENT_TASK_ID" ]; then
     if story_passes "$CURRENT_STORY_ID"; then
-      clickup_api_put_status "$CURRENT_TASK_ID" "$(clickup_completion_status)" || true
+      FINAL_STATUS="$(clickup_completion_status)"
+      FINAL_PHASE="testing"
+      case "$FINAL_STATUS" in
+        "$CLICKUP_STATUS_DONE") FINAL_PHASE="done" ;;
+        "$CLICKUP_STATUS_DEPLOYED") FINAL_PHASE="deployed" ;;
+      esac
+      clickup_api_put_status "$CURRENT_TASK_ID" "$FINAL_STATUS" || true
+      FINAL_EXCERPT="$(clickup_story_output_excerpt "$OUTPUT")"
+      clickup_post_story_comment "$CURRENT_TASK_ID" "$FINAL_PHASE" "Changed:
+- Story $CURRENT_STORY_ID passed this iteration and completion gate succeeded.
+Tests Run:
+- See Notes section for the iteration-reported test summary.
+Test Files:
+- Refer to commit diff for exact automated test files changed.
+Smoke Check:
+- none
+Outcome:
+- Task moved to $FINAL_STATUS.
+Notes:
+$FINAL_EXCERPT" || true
     fi
   fi
 
