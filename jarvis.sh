@@ -22,6 +22,7 @@ CLICKUP_STATUS_DEPLOYED=${CLICKUP_STATUS_DEPLOYED:-deployed}
 CLICKUP_STATUS_WAITING=${CLICKUP_STATUS_WAITING:-waiting}
 CLICKUP_STATUS_STUCK=${CLICKUP_STATUS_STUCK:-stuck}
 CLICKUP_AUTO_DEPLOY_ON_MAIN=${JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN:-${RALPH_CLICKUP_AUTO_DEPLOY_ON_MAIN:-0}}
+CLICKUP_MAIN_COMPLETION_STATUS=${JARVIS_CLICKUP_MAIN_COMPLETION_STATUS:-${RALPH_CLICKUP_MAIN_COMPLETION_STATUS:-}}
 CLICKUP_COMMENT_AUTHOR_LABEL=${CLICKUP_COMMENT_AUTHOR_LABEL:-Jarvis/Codex}
 CLICKUP_LIST_ID_RESOLVED=""
 CLICKUP_AUTH_HEADER=""
@@ -313,11 +314,17 @@ Automated update:
 
 clickup_completion_status() {
   local current_branch=""
+  local preferred_main_status=""
   current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 
   if [ -n "$current_branch" ] && [ "$current_branch" = "$MAIN_BRANCH" ]; then
     if [ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" = "1" ]; then
       echo "$CLICKUP_STATUS_DEPLOYED"
+      return
+    fi
+    preferred_main_status="${CLICKUP_MAIN_COMPLETION_STATUS:-}"
+    if [ -n "$preferred_main_status" ]; then
+      echo "$preferred_main_status"
       return
     fi
     echo "$CLICKUP_STATUS_DONE"

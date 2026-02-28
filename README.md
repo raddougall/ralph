@@ -207,6 +207,7 @@ Project scoping controls:
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_ON_START` (default: `0`; when enabled, updates a ClickUp Doc with a human-readable Jarvis directives overview at run start)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_STRICT` (default: `0`; set `1` to fail-fast if directives sync fails)
 - `JARVIS_CLICKUP_DIRECTIVES_SYNC_BRANCH_POLICY` (default: `main_only`; keep docs clean by syncing only on `JARVIS_MAIN_BRANCH`)
+- `JARVIS_CLICKUP_MAIN_COMPLETION_STATUS` (optional; override main-branch completion status, for example `testing`)
 - If `JARVIS_PROMPT_FILE` is unset and `<project>/.jarvis/prompt.md` exists, Jarvis uses that project-local prompt override. Legacy `.ralph/prompt.md` is still supported.
 
 Manual project sync command:

@@ -34,6 +34,7 @@ This document summarizes the runtime directives Jarvis follows during autonomous
 
 - When configured, ClickUp updates are required for each story.
 - Use `to do` as the active queue, move to `in progress` at start, then `testing` when ready.
+- Main-branch completion can be overridden with `JARVIS_CLICKUP_MAIN_COMPLETION_STATUS` (for example `testing`) when teams want manual verification before `done`.
 - Post activity comments at `start`, `progress`, and `testing` using `Jarvis/Codex` labeling.
 - Include implementation notes, exact test commands/outcomes, and changed test file paths.
 
