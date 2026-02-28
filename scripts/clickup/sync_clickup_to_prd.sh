@@ -173,6 +173,7 @@ stories_from_clickup="$(
           notes: parse_notes($raw),
           clickupStatus: ($task.status.status // ""),
           priority: priority_to_local($task.priority.priority // ""),
+          clickupOrder: (try (($task.orderindex // "") | tonumber) catch null),
           passes: (
             (($task.status.type // "") | ascii_downcase) as $type
             | (($task.status.status // "") | ascii_downcase) as $status
@@ -251,6 +252,7 @@ new_prd="$(
                     end
                   ),
                   priority: ($prev.priority // $story.priority // (order_key($story.id) * 10)),
+                  clickupOrder: ($story.clickupOrder // $prev.clickupOrder // null),
                   passes: $story.passes,
                   notes: (if ($story.notes | length) > 0 then $story.notes else ($prev.notes // "") end)
                 }

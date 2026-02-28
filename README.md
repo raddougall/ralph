@@ -261,6 +261,7 @@ When these environment variables are set, Jarvis treats ClickUp updates as requi
 Optional:
 
 - `CLICKUP_STATUS_TODO` (default `to do`)
+- `JARVIS_STORY_ORDER_MODE` (default `priority`; set `clickup` to follow manual task order from ClickUp `orderindex`)
 - `CLICKUP_STATUS_IN_PROGRESS` (default `in progress`)
 - `CLICKUP_STATUS_DONE` (default `done`)
 - `CLICKUP_STATUS_TESTING` (default `testing`)

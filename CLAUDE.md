@@ -36,6 +36,7 @@ Optional env vars:
 
 - `CLICKUP_API_BASE` (default: `https://api.clickup.com/api/v2`)
 - `CLICKUP_STATUS_TODO` (default: `to do`)
+- `JARVIS_STORY_ORDER_MODE` (default: `priority`; set `clickup` to pick next story by ClickUp manual order)
 - `CLICKUP_STATUS_IN_PROGRESS` (default: `in progress`)
 - `CLICKUP_STATUS_TESTING` (default: `testing`)
 - `CLICKUP_COMMENT_AUTHOR_LABEL` (default: `Jarvis/Codex`; prepended to every task comment so updates are visibly automated)

@@ -23,6 +23,7 @@ CLICKUP_STATUS_WAITING=${CLICKUP_STATUS_WAITING:-waiting}
 CLICKUP_STATUS_STUCK=${CLICKUP_STATUS_STUCK:-stuck}
 CLICKUP_AUTO_DEPLOY_ON_MAIN=${JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN:-${RALPH_CLICKUP_AUTO_DEPLOY_ON_MAIN:-0}}
 CLICKUP_MAIN_COMPLETION_STATUS=${JARVIS_CLICKUP_MAIN_COMPLETION_STATUS:-${RALPH_CLICKUP_MAIN_COMPLETION_STATUS:-}}
+STORY_ORDER_MODE_RAW=${JARVIS_STORY_ORDER_MODE:-${RALPH_STORY_ORDER_MODE:-priority}}
 CLICKUP_COMMENT_AUTHOR_LABEL=${CLICKUP_COMMENT_AUTHOR_LABEL:-Jarvis/Codex}
 CLICKUP_LIST_ID_RESOLVED=""
 CLICKUP_AUTH_HEADER=""
@@ -89,6 +90,16 @@ case "$COMMIT_MODE_RAW" in
     ;;
   *)
     echo "Invalid JARVIS_COMMIT_MODE='$COMMIT_MODE_RAW' (expected: runner, agent)" >&2
+    exit 2
+    ;;
+esac
+
+case "$STORY_ORDER_MODE_RAW" in
+  priority|clickup)
+    STORY_ORDER_MODE="$STORY_ORDER_MODE_RAW"
+    ;;
+  *)
+    echo "Invalid JARVIS_STORY_ORDER_MODE='$STORY_ORDER_MODE_RAW' (expected: priority, clickup)" >&2
     exit 2
     ;;
 esac
@@ -375,20 +386,37 @@ clickup_find_task_id_for_story() {
 }
 
 next_unblocked_story_id() {
-  jq -r '
-    (.userStories // [])
-    | map(
-        select(
-          (.passes == false)
-          and (((.notes // "") | startswith("BLOCKED:")) | not)
-          and ((.planning // false) != true)
-          and ((.skip // false) != true)
-          and (((.clickupStatus // "") | ascii_downcase) != "planning")
+  if [ "$STORY_ORDER_MODE" = "clickup" ]; then
+    jq -r '
+      (.userStories // [])
+      | map(
+          select(
+            (.passes == false)
+            and (((.notes // "") | startswith("BLOCKED:")) | not)
+            and ((.planning // false) != true)
+            and ((.skip // false) != true)
+            and (((.clickupStatus // "") | ascii_downcase) != "planning")
+          )
         )
-      )
-    | sort_by(.priority // 999999)
-    | .[0].id // empty
-  ' "$PRD_FILE"
+      | sort_by((.clickupOrder // 1e30), (.priority // 999999), .id)
+      | .[0].id // empty
+    ' "$PRD_FILE"
+  else
+    jq -r '
+      (.userStories // [])
+      | map(
+          select(
+            (.passes == false)
+            and (((.notes // "") | startswith("BLOCKED:")) | not)
+            and ((.planning // false) != true)
+            and ((.skip // false) != true)
+            and (((.clickupStatus // "") | ascii_downcase) != "planning")
+          )
+        )
+      | sort_by((.priority // 999999), .id)
+      | .[0].id // empty
+    ' "$PRD_FILE"
+  fi
 }
 
 story_passes() {

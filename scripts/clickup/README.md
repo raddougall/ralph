@@ -59,6 +59,7 @@ The pull sync script:
 
 - reads tasks with names like `[US-xxx] ...`
 - updates or creates matching stories in local `prd.json`
+- stores ClickUp `orderindex` as `clickupOrder` for optional manual-order execution mode
 - maps ClickUp done/closed statuses to `passes=true`
 - can optionally prune local-only stories with `CLICKUP_PRUNE_MISSING=1`
 - can append a sync note to `progress.txt` (`CLICKUP_SYNC_APPEND_PROGRESS=1`)
