@@ -836,7 +836,7 @@ has_dirty_worktree() {
 is_runtime_generated_path() {
   local path="$1"
   case "$path" in
-    .jarvis/*|.codex/*|jarvis.log|approval-queue.txt|.codex-last-message.*|.codex-stream-log.*)
+    .jarvis/*|.codex/*|jarvis.log|approval-queue.txt|.codex-last-message.*|.codex-stream-log.*|.jarvis-iteration-prompt.*|.jarvis-capability-prompt.*|.jarvis-capability-last.*|.jarvis-capability-stream.*)
       return 0
       ;;
     *)
@@ -1225,6 +1225,7 @@ run_codex_effective_capability_preflight() {
 
   host_list="${unique_hosts[*]}"
 
+  mkdir -p "$PROJECT_DIR/.jarvis" 2>/dev/null || true
   probe_prompt_file="$(mktemp "${PROJECT_DIR}/.jarvis-capability-prompt.XXXXXX")"
   probe_last_message_file="$(mktemp "${PROJECT_DIR}/.jarvis-capability-last.XXXXXX")"
   probe_stream_log_file="$(mktemp "${PROJECT_DIR}/.jarvis-capability-stream.XXXXXX")"
@@ -1737,7 +1738,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     PRE_RUN_STORY_SNAPSHOT_FILE="$(mktemp)"
     snapshot_non_target_stories "$CURRENT_STORY_ID" "$PRE_RUN_STORY_SNAPSHOT_FILE"
 
-    ITERATION_PROMPT_FILE="$(mktemp "${PROJECT_DIR}/.jarvis-iteration-prompt.XXXXXX")"
+    ITERATION_PROMPT_FILE="$(mktemp "${PROJECT_DIR}/.jarvis/iteration-prompt.XXXXXX")"
     build_iteration_prompt_file "$CURRENT_STORY_ID" "$CURRENT_STORY_TITLE" "$CURRENT_STORY_PRIORITY" "$ITERATION_PROMPT_FILE"
   else
     echo "No unblocked story selected; running with base prompt."

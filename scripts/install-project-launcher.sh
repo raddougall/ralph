@@ -457,6 +457,10 @@ ensure_gitignore_entry() {
 
 ensure_gitignore_entry "scripts/jarvis/.env.jarvis.local"
 ensure_gitignore_entry "scripts/clickup/.env.clickup"
+ensure_gitignore_entry ".jarvis-iteration-prompt.*"
+ensure_gitignore_entry ".jarvis-capability-prompt.*"
+ensure_gitignore_entry ".jarvis-capability-last.*"
+ensure_gitignore_entry ".jarvis-capability-stream.*"
 
 echo "Installed Jarvis launcher at: $TARGET_JARVIS_DIR"
 echo "Installed Jarvis sync helper at: $TARGET_JARVIS_DIR/sync-with-master.sh"
