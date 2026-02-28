@@ -18,6 +18,7 @@ set -euo pipefail
 #   CLICKUP_STATUS_PLANNING (default: planning)
 #   JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN (default: 0)
 #   JARVIS_MAIN_BRANCH (default: main)
+#   JARVIS_CLICKUP_MAIN_COMPLETION_STATUS (optional: override main-branch completion status, e.g. testing)
 #
 # Example:
 #   CLICKUP_TOKEN=... \
@@ -44,6 +45,7 @@ CLICKUP_STATUS_DEPLOYED="${CLICKUP_STATUS_DEPLOYED:-deployed}"
 CLICKUP_STATUS_PLANNING="${CLICKUP_STATUS_PLANNING:-planning}"
 CLICKUP_MAIN_BRANCH="${JARVIS_MAIN_BRANCH:-${RALPH_MAIN_BRANCH:-main}}"
 CLICKUP_AUTO_DEPLOY_ON_MAIN="${JARVIS_CLICKUP_AUTO_DEPLOY_ON_MAIN:-${RALPH_CLICKUP_AUTO_DEPLOY_ON_MAIN:-0}}"
+CLICKUP_MAIN_COMPLETION_STATUS="${JARVIS_CLICKUP_MAIN_COMPLETION_STATUS:-${RALPH_CLICKUP_MAIN_COMPLETION_STATUS:-}}"
 
 if [[ -z "${CLICKUP_TOKEN:-}" ]]; then
   echo "Missing required env var: CLICKUP_TOKEN" >&2
@@ -198,10 +200,21 @@ if [[ -z "$planning_status" ]]; then
   planning_status="$CLICKUP_STATUS_PLANNING"
 fi
 
+main_completion_status=""
+if [[ -n "$CLICKUP_MAIN_COMPLETION_STATUS" ]]; then
+  main_completion_status="$(resolve_clickup_status "$CLICKUP_MAIN_COMPLETION_STATUS")"
+  if [[ -z "$main_completion_status" ]]; then
+    main_completion_status="$CLICKUP_MAIN_COMPLETION_STATUS"
+  fi
+fi
+if [[ -z "$main_completion_status" ]]; then
+  main_completion_status="$done_status_preferred"
+fi
+
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 
 echo "Using list ID: $CLICKUP_LIST_ID"
-echo "Status mapping: todo='$todo_status' planning='$planning_status' done='$done_status_preferred' testing='$testing_status' deployed='$deployed_status' (legacy done='$done_status')"
+echo "Status mapping: todo='$todo_status' planning='$planning_status' done='$done_status_preferred' testing='$testing_status' deployed='$deployed_status' main_completion='$main_completion_status' (legacy done='$done_status')"
 
 tasks_file="$(mktemp)"
 trap 'rm -f "$tasks_file"' EXIT
@@ -264,7 +277,7 @@ while IFS= read -r story; do
     status="$todo_status"
     if [[ "$passes" == "true" ]]; then
       if [[ -n "$current_branch" && "$current_branch" == "$CLICKUP_MAIN_BRANCH" ]]; then
-        status="$done_status_preferred"
+        status="$main_completion_status"
         if [[ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" == "1" ]]; then
           status="$deployed_status"
         fi

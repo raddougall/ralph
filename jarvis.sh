@@ -334,6 +334,20 @@ clickup_completion_status() {
   echo "$CLICKUP_STATUS_TESTING"
 }
 
+clickup_main_completion_status() {
+  local preferred_main_status=""
+  if [ "$CLICKUP_AUTO_DEPLOY_ON_MAIN" = "1" ]; then
+    echo "$CLICKUP_STATUS_DEPLOYED"
+    return
+  fi
+  preferred_main_status="${CLICKUP_MAIN_COMPLETION_STATUS:-}"
+  if [ -n "$preferred_main_status" ]; then
+    echo "$preferred_main_status"
+    return
+  fi
+  echo "$CLICKUP_STATUS_DONE"
+}
+
 clickup_find_task_id_for_story() {
   local story_id="$1"
   local page=0
@@ -1680,6 +1694,7 @@ BOOTSTRAP_NON_RUNTIME_FINGERPRINT="$(non_runtime_dirty_fingerprint)"
 
 echo "Branch policy for this run: $BRANCH_POLICY (main branch: $MAIN_BRANCH)"
 echo "Commit mode for this run: $COMMIT_MODE (clean-start required: $RUNNER_COMMIT_REQUIRE_CLEAN_START)"
+echo "ClickUp completion policy: main='$(clickup_main_completion_status)' non-main='$CLICKUP_STATUS_TESTING' (auto-deploy-on-main: $CLICKUP_AUTO_DEPLOY_ON_MAIN, override: ${CLICKUP_MAIN_COMPLETION_STATUS:-<none>})"
 if ! enforce_branch_policy_once; then
   run_end_directives_sync_once
   exit 2
