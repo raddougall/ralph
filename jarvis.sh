@@ -246,7 +246,7 @@ clickup_is_ready() {
 
 clickup_api_get() {
   local path="$1"
-  curl -sS -H "$CLICKUP_AUTH_HEADER" -H "Content-Type: application/json" "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}$path"
+  curl -sS --fail-with-body -H "$CLICKUP_AUTH_HEADER" -H "Content-Type: application/json" "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}$path"
 }
 
 clickup_api_put_status() {
@@ -254,7 +254,7 @@ clickup_api_put_status() {
   local status="$2"
 
   jq -n --arg status "$status" '{status:$status}' \
-    | curl -sS -X PUT "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}/task/$task_id" \
+    | curl -sS --fail-with-body -X PUT "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}/task/$task_id" \
       -H "$CLICKUP_AUTH_HEADER" \
       -H "Content-Type: application/json" \
       --data-binary @- >/dev/null
@@ -264,7 +264,11 @@ clickup_api_post_comment() {
   local task_id="$1"
   local comment="$2"
 
-  jq -n --arg comment_text "$comment" '{comment_text:$comment_text, notify_all:false}'     | curl -sS -X POST "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}/task/$task_id/comment"       -H "$CLICKUP_AUTH_HEADER"       -H "Content-Type: application/json"       --data-binary @- >/dev/null
+  jq -n --arg comment_text "$comment" '{comment_text:$comment_text, notify_all:false}' \
+    | curl -sS --fail-with-body -X POST "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}/task/$task_id/comment" \
+      -H "$CLICKUP_AUTH_HEADER" \
+      -H "Content-Type: application/json" \
+      --data-binary @- >/dev/null
 }
 
 clickup_story_output_excerpt() {
@@ -285,14 +289,25 @@ clickup_post_story_comment() {
   local phase="$2"
   local body="$3"
   local story_id="${CURRENT_STORY_ID:-unknown}"
+  local fallback_comment=""
   local comment="[$CLICKUP_COMMENT_AUTHOR_LABEL][$story_id][$phase]
 $body"
 
   if ! clickup_api_post_comment "$task_id" "$comment"; then
-    echo "Warning: failed to post ClickUp comment ($phase) for $story_id task $task_id." >&2
-    report_runtime_error_feedback "clickup" "clickup_comment_post_failed" "warning" "Failed to post ClickUp $phase comment."
-    return 1
+    fallback_comment="[$CLICKUP_COMMENT_AUTHOR_LABEL][$story_id][$phase]
+Automated update:
+- Phase: $phase
+- Story: $story_id
+- Notes: primary detailed comment failed; posted compact fallback."
+    if ! clickup_api_post_comment "$task_id" "$fallback_comment"; then
+      echo "Warning: failed to post ClickUp comment ($phase) for $story_id task $task_id." >&2
+      report_runtime_error_feedback "clickup" "clickup_comment_post_failed" "warning" "Failed to post ClickUp $phase comment (primary + fallback)."
+      return 1
+    fi
+    echo "ClickUp comment posted (fallback): story=$story_id phase=$phase task=$task_id"
+    return 0
   fi
+  echo "ClickUp comment posted: story=$story_id phase=$phase task=$task_id"
   return 0
 }
 
@@ -1798,6 +1813,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   if clickup_is_ready && [ -n "$CURRENT_STORY_ID" ]; then
     CURRENT_TASK_ID="$(clickup_find_task_id_for_story "$CURRENT_STORY_ID" || true)"
     if [ -n "$CURRENT_TASK_ID" ]; then
+      echo "ClickUp task resolved: story=$CURRENT_STORY_ID task=$CURRENT_TASK_ID"
       clickup_api_put_status "$CURRENT_TASK_ID" "$CLICKUP_STATUS_IN_PROGRESS" || true
       CURRENT_BRANCH_NAME="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
       clickup_post_story_comment "$CURRENT_TASK_ID" "start" "Plan:
@@ -1806,6 +1822,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 - Apply Jarvis guardrails and commit gate (mode: $COMMIT_MODE).
 Scope/Assumptions:
 - Iteration $i/$MAX_ITERATIONS on branch ${CURRENT_BRANCH_NAME:-unknown}." || true
+    else
+      echo "Warning: ClickUp task not found for story $CURRENT_STORY_ID in list $CLICKUP_LIST_ID_RESOLVED." >&2
     fi
   fi
 
