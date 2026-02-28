@@ -14,6 +14,7 @@ BRANCH_POLICY_RAW=${JARVIS_BRANCH_POLICY:-${RALPH_BRANCH_POLICY:-prd}}
 MAIN_BRANCH=${JARVIS_MAIN_BRANCH:-${RALPH_MAIN_BRANCH:-main}}
 COMMIT_MODE_RAW=${JARVIS_COMMIT_MODE:-${RALPH_COMMIT_MODE:-runner}}
 RUNNER_COMMIT_REQUIRE_CLEAN_START=${JARVIS_RUNNER_COMMIT_REQUIRE_CLEAN_START:-${RALPH_RUNNER_COMMIT_REQUIRE_CLEAN_START:-1}}
+CLICKUP_DISABLE_ON_NESTED_DNS_FAILURE=${JARVIS_CLICKUP_DISABLE_ON_NESTED_DNS_FAILURE:-${RALPH_CLICKUP_DISABLE_ON_NESTED_DNS_FAILURE:-0}}
 CLICKUP_STATUS_IN_PROGRESS=${CLICKUP_STATUS_IN_PROGRESS:-in progress}
 CLICKUP_STATUS_DONE=${CLICKUP_STATUS_DONE:-done}
 CLICKUP_STATUS_TESTING=${CLICKUP_STATUS_TESTING:-testing}
@@ -1159,6 +1160,8 @@ run_codex_effective_capability_preflight() {
   local enabled="${JARVIS_CODEX_CAPABILITY_PREFLIGHT:-${RALPH_CODEX_CAPABILITY_PREFLIGHT:-1}}"
   local strict_mode="${JARVIS_CODEX_CAPABILITY_PREFLIGHT_STRICT:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_STRICT:-0}}"
   local timeout_seconds="${JARVIS_CODEX_CAPABILITY_PREFLIGHT_TIMEOUT_SECONDS:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_TIMEOUT_SECONDS:-180}}"
+  local include_clickup="${JARVIS_CODEX_CAPABILITY_PREFLIGHT_INCLUDE_CLICKUP:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_INCLUDE_CLICKUP:-0}}"
+  local require_nested_git_write="${JARVIS_CODEX_CAPABILITY_PREFLIGHT_REQUIRE_NESTED_GIT_WRITE:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_REQUIRE_NESTED_GIT_WRITE:-}}"
   local -a hosts=()
   local -a unique_hosts=()
   local host
@@ -1171,7 +1174,9 @@ run_codex_effective_capability_preflight() {
   local output=""
   local cmd_status=0
   local fail_reasons=()
+  local advisory_reasons=()
   local host_failures=""
+  local non_clickup_host_failures=""
 
   if [ "$AGENT" != "codex" ]; then
     return 0
@@ -1180,9 +1185,17 @@ run_codex_effective_capability_preflight() {
     return 0
   fi
 
+  if [ -z "$require_nested_git_write" ]; then
+    if [ "$COMMIT_MODE" = "runner" ]; then
+      require_nested_git_write=0
+    else
+      require_nested_git_write=1
+    fi
+  fi
+
   hosts+=("$(extract_host_from_url "${JARVIS_OPENAI_PREFLIGHT_URL:-${RALPH_OPENAI_PREFLIGHT_URL:-https://chatgpt.com}}")")
   hosts+=("registry.npmjs.org")
-  if has_clickup_config; then
+  if [ "$include_clickup" = "1" ] && has_clickup_config; then
     hosts+=("$(extract_host_from_url "${CLICKUP_API_BASE:-https://api.clickup.com/api/v2}")")
   fi
   if [ -n "${JARVIS_CODEX_CAPABILITY_PREFLIGHT_HOSTS:-${RALPH_CODEX_CAPABILITY_PREFLIGHT_HOSTS:-}}" ]; then
@@ -1270,15 +1283,36 @@ EOF
     fail_reasons+=("capability_probe_no_markers")
   fi
   if echo "$output" | grep -q "GIT_WRITE_FAIL"; then
-    fail_reasons+=("git_write_unavailable_in_nested_codex")
+    if [ "$require_nested_git_write" = "1" ]; then
+      fail_reasons+=("git_write_unavailable_in_nested_codex")
+    else
+      advisory_reasons+=("git_write_unavailable_in_nested_codex(ignored_in_runner_commit_mode)")
+    fi
   fi
 
   host_failures="$(echo "$output" | grep -oE "HOST_FAIL:[^[:space:]]+" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
   if [ -n "$host_failures" ]; then
-    fail_reasons+=("nested_dns_or_https_unreachable:$host_failures")
-    if echo "$host_failures" | grep -q "HOST_FAIL:api.clickup.com"; then
-      disable_clickup_for_run "Codex capability preflight could not reach api.clickup.com."
+    non_clickup_host_failures="$(
+      echo "$host_failures" \
+        | tr ' ' '\n' \
+        | awk 'NF' \
+        | grep -v '^HOST_FAIL:api.clickup.com$' \
+        | tr '\n' ' ' \
+        | sed 's/[[:space:]]*$//'
+    )"
+    if [ -n "$non_clickup_host_failures" ]; then
+      fail_reasons+=("nested_dns_or_https_unreachable:$non_clickup_host_failures")
     fi
+    if echo "$host_failures" | grep -q "HOST_FAIL:api.clickup.com"; then
+      advisory_reasons+=("nested_clickup_dns_unreachable")
+      if [ "$CLICKUP_DISABLE_ON_NESTED_DNS_FAILURE" = "1" ]; then
+        disable_clickup_for_run "Codex capability preflight could not reach api.clickup.com."
+      fi
+    fi
+  fi
+
+  if [ "${#advisory_reasons[@]}" -gt 0 ]; then
+    echo "Codex capability preflight note: ${advisory_reasons[*]}" >&2
   fi
 
   rm -f "$probe_prompt_file" "$probe_last_message_file" "$probe_stream_log_file" 2>/dev/null || true
@@ -1288,13 +1322,14 @@ EOF
     return 0
   fi
 
-  echo "Codex capability preflight failed: ${fail_reasons[*]}" >&2
-  echo "Recovery: verify nested Codex sandbox/network capability; if unavailable, run with fallback/manual commit workflow." >&2
-
   if [ "$strict_mode" = "1" ]; then
+    echo "Codex capability preflight failed: ${fail_reasons[*]}" >&2
+    echo "Recovery: verify nested Codex sandbox/network capability; if unavailable, run with fallback/manual commit workflow." >&2
     return 1
   fi
-  echo "Warning: continuing despite capability preflight failure (JARVIS_CODEX_CAPABILITY_PREFLIGHT_STRICT=0)." >&2
+
+  echo "Codex capability preflight warning (non-fatal): ${fail_reasons[*]}" >&2
+  echo "Continuing because JARVIS_CODEX_CAPABILITY_PREFLIGHT_STRICT=0." >&2
   return 0
 }
 
@@ -1828,7 +1863,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   fi
 
   if output_has_clickup_dns_failure "$OUTPUT" && [ "$CLICKUP_RUNTIME_DISABLED" != "1" ]; then
-    disable_clickup_for_run "Nested Codex DNS could not resolve api.clickup.com; skipping ClickUp actions for the remainder of this run."
+    if [ "$CLICKUP_DISABLE_ON_NESTED_DNS_FAILURE" = "1" ]; then
+      disable_clickup_for_run "Nested Codex DNS could not resolve api.clickup.com; skipping ClickUp actions for the remainder of this run."
+    fi
     report_runtime_error_feedback "infra" "clickup_dns_unreachable_in_nested_codex" "warning" "Detected ClickUp DNS resolution failures in nested Codex output."
   fi
   if output_has_dns_failure "$OUTPUT"; then
